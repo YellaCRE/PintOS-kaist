@@ -14,7 +14,9 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+
 // junhee 브렌치에서 푸시
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -79,6 +81,9 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+static struct list sleep_list;	// define sleep_list
+static int64_t global_ticks;	// define global ticks
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -94,6 +99,8 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
    finishes. */
 void
 thread_init (void) {
+	int64_t global_ticks;
+
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* Reload the temporal gdt for the kernel
@@ -109,6 +116,9 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+
+	list_init (&sleep_list);  // sleep list intialize
+	global_ticks = NULL;	  // global_ticks intialize
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
