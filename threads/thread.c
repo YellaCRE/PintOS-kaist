@@ -15,7 +15,6 @@
 #include "userprog/process.h"
 #endif
 
-// junhee 브렌치에서 푸시
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -82,7 +81,7 @@ static tid_t allocate_tid (void);
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
 static struct list sleep_list;	// define sleep_list
-static int64_t global_ticks;	// define global ticks
+int64_t global_ticks;			// define global ticks
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -99,8 +98,6 @@ static int64_t global_ticks;	// define global ticks
    finishes. */
 void
 thread_init (void) {
-	int64_t global_ticks;
-
 	ASSERT (intr_get_level () == INTR_OFF);
 
 	/* Reload the temporal gdt for the kernel
@@ -117,8 +114,8 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	list_init (&sleep_list);  // sleep list intialize
-	global_ticks = NULL;	  // global_ticks intialize
+	list_init (&sleep_list);  		// intialize sleep list
+	global_ticks = timer_ticks ();	// intialize global_ticks
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -316,6 +313,50 @@ thread_yield (void) {
 		list_push_back (&ready_list, &curr->elem);
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+/* Sleep thread.*/
+void
+thread_sleep (int64_t ticks){
+	struct thread *curr;
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+
+	old_level = intr_disable ();				// interrupt disable
+	curr = thread_current ();					// 에러는 아니지만 disable하고 구해주는게 정확하다
+	
+	if (curr->local_ticks < global_ticks)
+		global_ticks = curr->local_ticks;		// update global ticks
+
+	curr->local_ticks = ticks;					// local ticks 설정
+	list_push_back (&sleep_list, &curr->elem);	// sleep_list에 삽입하고
+	thread_block();								// BLOCKED로 바꾼다
+	
+	intr_set_level (old_level);
+}
+
+/* Wakeup thread.*/
+void
+thread_wakeup (int64_t ticks){
+	// list_begin부터 탐색
+	struct list_elem *wakeup_elem = list_begin(&sleep_list);	
+	
+	// global_ticks를 지났을 때만 실행
+	if (global_ticks <= ticks){	
+		// list_end까지 탐색
+		while(wakeup_elem != list_end(&sleep_list)){
+			struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
+			
+			if (tmp->local_ticks <= ticks){
+				wakeup_elem = list_remove(wakeup_elem);		// sleep_list에서 삭제
+				thread_unblock(tmp);						// READY로 바꾸고 ready_list에 삽입
+			}
+			else{
+				wakeup_elem = list_next(wakeup_elem);
+			}
+		}
+	}
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
