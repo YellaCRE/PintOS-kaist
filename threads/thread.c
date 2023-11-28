@@ -189,7 +189,6 @@ tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
-	struct thread *curr;	// 현재 쓰레드 선언
 	tid_t tid;
 
 	ASSERT (function != NULL);
@@ -217,10 +216,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	curr = thread_current();			// 현재 쓰레드 호출
-	if (t->priority > curr->priority){  // 현재 쓰레드와 우선순위 비교
-		thread_yield();					// 현재 쓰레드가 더 크면 양보
-	}	
+	yield_cpu();	// 현재 쓰레드의 우선순위와 비교해서 양보
 
 	return tid;
 }
@@ -255,19 +251,30 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);	// 우선순위 고려
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
 
 // 우선순위 비교 함수
-bool cmp_priority(struct list_elem *curr_elem, struct list_elem *e){
+bool 
+cmp_priority(struct list_elem *curr_elem, struct list_elem *e){
 	int *curr_priority = list_entry(curr_elem, struct thread, elem)->priority;
 	int *next_priority = list_entry(e, struct thread, elem)->priority;
 	if (curr_priority > next_priority)
 		return true;
 	else 
 		return false;
+}
+
+// CPU 양보 함수
+void 
+yield_cpu(void){
+	struct thread *curr = thread_current();	// 현재 쓰레드 선언
+	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
+	if (first->priority > curr->priority){		// 현재 쓰레드와 우선순위 비교
+		thread_yield();						// 현재 쓰레드가 더 크면 양보
+	}
 }
 
 /* Returns the name of the running thread. */

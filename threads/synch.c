@@ -66,7 +66,7 @@ sema_down (struct semaphore *sema) {
 
 	old_level = intr_disable ();
 	while (sema->value == 0) {
-		list_push_back (&sema->waiters, &thread_current ()->elem);
+		list_insert_ordered(&sema->waiters, &thread_current ()->elem, cmp_priority, NULL);	// 우선순위 고려
 		thread_block ();
 	}
 	sema->value--;
@@ -114,6 +114,7 @@ sema_up (struct semaphore *sema) {
 					struct thread, elem));
 	sema->value++;
 	intr_set_level (old_level);
+	yield_cpu();	// unblock 했기 때문에 양보 확인
 }
 
 static void sema_test_helper (void *sema_);
@@ -282,7 +283,7 @@ cond_wait (struct condition *cond, struct lock *lock) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	sema_init (&waiter.semaphore, 0);
-	list_push_back (&cond->waiters, &waiter.elem);
+	list_insert_ordered(&cond->waiters, &waiter.elem, cmp_sema, NULL);	// 우선순위 고려
 	lock_release (lock);
 	sema_down (&waiter.semaphore);
 	lock_acquire (lock);
@@ -303,6 +304,7 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (lock_held_by_current_thread (lock));
 
 	if (!list_empty (&cond->waiters))
+		list_sort(&cond->waiters, cmp_sema, NULL);	// 우선순위가 업데이트 되었을 수도 있으니 재정렬
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
 }
@@ -320,4 +322,17 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 	while (!list_empty (&cond->waiters))
 		cond_signal (cond, lock);
+}
+
+// semaphore elem으로 우선순위 비교
+bool
+cmp_sema(struct list_elem *curr_elem, struct list_elem *e){
+	struct semaphore *curr_sema = &list_entry(curr_elem, struct semaphore_elem, elem)->semaphore;
+	struct semaphore *next_sema = &list_entry(e, struct semaphore_elem, elem)->semaphore;
+	int *curr_priority = list_entry (list_begin (&curr_sema->waiters), struct thread, elem)->priority;
+	int *next_priority = list_entry (list_begin (&next_sema->waiters), struct thread, elem)->priority;
+	if (curr_priority > next_priority)
+		return true;
+	else 
+		return false;
 }
