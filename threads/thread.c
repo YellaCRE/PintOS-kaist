@@ -83,6 +83,8 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 static struct list sleep_list;	// define sleep_list
 int64_t global_ticks;			// define global ticks
 
+bool cmp_priority(struct list_elem *curr_elem, struct list_elem *e);	// compare priority
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -187,6 +189,7 @@ tid_t
 thread_create (const char *name, int priority,
 		thread_func *function, void *aux) {
 	struct thread *t;
+	struct thread *curr;	// 현재 쓰레드 선언
 	tid_t tid;
 
 	ASSERT (function != NULL);
@@ -213,6 +216,11 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+
+	curr = thread_current();			// 현재 쓰레드 호출
+	if (t->priority > curr->priority){  // 현재 쓰레드와 우선순위 비교
+		thread_yield();					// 현재 쓰레드가 더 크면 양보
+	}	
 
 	return tid;
 }
@@ -247,9 +255,19 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
+}
+
+// 우선순위 비교 함수
+bool cmp_priority(struct list_elem *curr_elem, struct list_elem *e){
+	int *curr_priority = list_entry(curr_elem, struct thread, elem)->priority;
+	int *next_priority = list_entry(e, struct thread, elem)->priority;
+	if (curr_priority > next_priority)
+		return true;
+	else 
+		return false;
 }
 
 /* Returns the name of the running thread. */
@@ -310,7 +328,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);	// 양보해주고 우선순위 순으로 ready에 들어간다
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -363,6 +381,7 @@ thread_wakeup (int64_t ticks){
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	list_sort(&ready_list, cmp_priority, NULL);	// 우선순위 바꾸고 재정렬
 }
 
 /* Returns the current thread's priority. */
