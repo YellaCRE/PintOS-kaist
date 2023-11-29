@@ -234,10 +234,10 @@ donate_priority(struct lock *lock){
 		if (holder_thread->priority < first_donor->priority){
 			holder_thread->priority = first_donor->priority;	// donate
 
-			// // nested donation
-			// if (holder_thread->wait_on_lock != NULL){
-			// 	donate_priority(holder_thread->wait_on_lock);
-			// }
+			// nested donation
+			if (holder_thread->wait_on_lock != NULL){
+				donate_priority(holder_thread->wait_on_lock);
+			}
 		}
 	}
 }

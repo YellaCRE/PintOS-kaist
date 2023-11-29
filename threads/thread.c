@@ -400,7 +400,7 @@ thread_set_priority (int new_priority) {
 		refresh_lock(holding_lock);
 	}
 	
-	thread_preept();											// 새로운 우선순위가 높은지 양보 확인
+	thread_preept();										// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
@@ -500,6 +500,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->magic = THREAD_MAGIC;
 	
 	list_init (&t->donors);				// initialize donors
+	t->wait_on_lock = NULL;				// initialize wait_on_lock
 	t->original_priority = priority;	// set original_priority
 }
 
