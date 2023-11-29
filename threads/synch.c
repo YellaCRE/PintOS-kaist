@@ -109,9 +109,12 @@ sema_up (struct semaphore *sema) {
 	ASSERT (sema != NULL);
 
 	old_level = intr_disable ();
-	if (!list_empty (&sema->waiters))
+	if (!list_empty (&sema->waiters)){
+		list_sort(&sema->waiters, cmp_priority, NULL);
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
+	}
+
 	sema->value++;
 
 	thread_preept();	// unblock 했기 때문에 양보 확인
@@ -204,7 +207,6 @@ lock_acquire (struct lock *lock) {
 		// Store current priority
 		donate_priority(lock);
 	}
-
 	sema_down (&lock->semaphore);		// blocking
 	lock->holder = thread_current();
 	lock->holder->wait_on_lock = NULL;	// holder가 되었기 때문에 wait_on_lock을 비워준다.
