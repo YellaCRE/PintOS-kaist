@@ -42,6 +42,9 @@ bool cmp_sema(const struct list_elem *curr_elem, const struct list_elem *e, void
 bool cmp_d_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare d_elem's priority
 void donate_priority(struct lock *lock);														// donate priority
 
+void remove_lock(struct lock *lock);	// remove next holder
+void refresh_lock(struct lock *lock);	// refresh current holder's priority
+
 /* Optimization barrier.
  *
  * The compiler will not reorder operations across an

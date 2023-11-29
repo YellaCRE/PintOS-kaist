@@ -114,7 +114,7 @@ sema_up (struct semaphore *sema) {
 					struct thread, elem));
 	sema->value++;
 
-	yield_cpu();	// unblock 했기 때문에 양보 확인
+	thread_preept();	// unblock 했기 때문에 양보 확인
 
 	intr_set_level (old_level);
 }
@@ -269,12 +269,24 @@ lock_try_acquire (struct lock *lock) {
    handler. */
 void
 lock_release (struct lock *lock) {
-	struct list_elem *e;
-
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
 	// remove
+	remove_lock(lock);
+
+	// holder_priority refresh
+	refresh_lock(lock);
+
+	lock->holder = NULL;
+	sema_up (&lock->semaphore);
+}
+
+// lock의 다음 holder를 donors에서 삭제하는 함수
+void
+remove_lock(struct lock *lock){
+	struct list_elem *e;
+
 	if(!list_empty(&lock->holder->donors)){
 		for(e=list_begin(&lock->holder->donors); e!=list_end(&lock->holder->donors); e=list_next(e)){
 			if(list_entry(e, struct thread, d_elem)->wait_on_lock == lock){
@@ -282,15 +294,17 @@ lock_release (struct lock *lock) {
 			}
 		}
 	}
-	// holder_priority refresh
+}
+
+// 원래 holder의 priority를 refresh하는 함수
+void
+refresh_lock(struct lock *lock){
 	if(!list_empty(&lock->holder->donors))
 		lock->holder->priority = list_entry(list_max(&lock->holder->donors, cmp_d_priority, NULL), struct thread, d_elem)->priority;
 	else
 		lock->holder->priority = lock->holder->original_priority;
-
-	lock->holder = NULL;
-	sema_up (&lock->semaphore);
 }
+
 /* Returns true if the current thread holds LOCK, false
    otherwise.  (Note that testing whether some other thread holds
    a lock would be racy.) */
