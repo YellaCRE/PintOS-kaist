@@ -303,10 +303,11 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED) {
 	ASSERT (!intr_context ());
 	ASSERT (lock_held_by_current_thread (lock));
 
-	if (!list_empty (&cond->waiters))
+	if (!list_empty (&cond->waiters)){
 		list_sort(&cond->waiters, cmp_sema, NULL);	// 우선순위가 업데이트 되었을 수도 있으니 재정렬
 		sema_up (&list_entry (list_pop_front (&cond->waiters),
 					struct semaphore_elem, elem)->semaphore);
+	}
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -326,12 +327,12 @@ cond_broadcast (struct condition *cond, struct lock *lock) {
 
 // semaphore elem으로 우선순위 비교
 bool
-cmp_sema(struct list_elem *curr_elem, struct list_elem *e){
+cmp_sema(const struct list_elem *curr_elem, const struct list_elem *e, void *aux UNUSED){
 	struct semaphore *curr_sema = &list_entry(curr_elem, struct semaphore_elem, elem)->semaphore;
 	struct semaphore *next_sema = &list_entry(e, struct semaphore_elem, elem)->semaphore;
-	int *curr_priority = list_entry (list_begin (&curr_sema->waiters), struct thread, elem)->priority;
-	int *next_priority = list_entry (list_begin (&next_sema->waiters), struct thread, elem)->priority;
-	if (curr_priority > next_priority)
+	struct thread *curr_thread = list_entry (list_begin (&curr_sema->waiters), struct thread, elem);
+	struct thread *next_thread = list_entry (list_begin (&next_sema->waiters), struct thread, elem);
+	if (curr_thread->priority > next_thread->priority)
 		return true;
 	else 
 		return false;

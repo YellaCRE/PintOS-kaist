@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "devices/timer.h"	// timer_ticks warning 제거
 
 
 /* Random value for struct thread's `magic' member.
@@ -81,9 +82,7 @@ static tid_t allocate_tid (void);
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
 static struct list sleep_list;	// define sleep_list
-int64_t global_ticks;			// define global ticks
-
-bool cmp_priority(struct list_elem *curr_elem, struct list_elem *e);	// compare priority
+static int64_t global_ticks;	// define global ticks
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -257,11 +256,11 @@ thread_unblock (struct thread *t) {
 }
 
 // 우선순위 비교 함수
-bool 
-cmp_priority(struct list_elem *curr_elem, struct list_elem *e){
-	int *curr_priority = list_entry(curr_elem, struct thread, elem)->priority;
-	int *next_priority = list_entry(e, struct thread, elem)->priority;
-	if (curr_priority > next_priority)
+bool
+cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux UNUSED){
+	struct thread *curr_thread = list_entry(curr_elem, struct thread, elem);
+	struct thread *next_thread = list_entry(e, struct thread, elem);
+	if (curr_thread->priority > next_thread->priority)
 		return true;
 	else 
 		return false;
@@ -270,10 +269,11 @@ cmp_priority(struct list_elem *curr_elem, struct list_elem *e){
 // CPU 양보 함수
 void 
 yield_cpu(void){
-	struct thread *curr = thread_current();	// 현재 쓰레드 선언
+	struct thread *curr = thread_current();		// 현재 쓰레드 선언
 	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
-	if (first->priority > curr->priority){		// 현재 쓰레드와 우선순위 비교
-		thread_yield();						// 현재 쓰레드가 더 크면 양보
+	// 현재 쓰레드와 우선순위 비교
+	if (first->priority > curr->priority){
+		thread_yield();							// 현재 쓰레드가 더 크면 양보
 	}
 }
 
@@ -354,9 +354,9 @@ thread_sleep (int64_t ticks){
 	if (curr->local_ticks < global_ticks)
 		global_ticks = curr->local_ticks;		// update global ticks
 
-	curr->local_ticks = ticks;					// local ticks 설정
-	list_push_back (&sleep_list, &curr->elem);	// sleep_list에 삽입하고
-	thread_block();								// BLOCKED로 바꾼다
+	curr->local_ticks = ticks;											// local ticks 설정
+	list_insert_ordered(&sleep_list, &curr->elem, cmp_priority, NULL);	// sleep_list에 삽입 (우선순위 고려)
+	thread_block();														// BLOCKED로 바꾼다
 	
 	intr_set_level (old_level);
 }
@@ -389,6 +389,7 @@ void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
 	list_sort(&ready_list, cmp_priority, NULL);	// 우선순위 바꾸고 재정렬
+	yield_cpu();								// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
