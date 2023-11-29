@@ -38,7 +38,9 @@ void cond_wait (struct condition *, struct lock *);
 void cond_signal (struct condition *, struct lock *);
 void cond_broadcast (struct condition *, struct lock *);
 
-bool cmp_sema(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare priority
+bool cmp_sema(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);			// compare sema's priority
+bool cmp_d_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare d_elem's priority
+void donate_priority(struct lock *lock);														// donate priority
 
 /* Optimization barrier.
  *

@@ -486,7 +486,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
+	t->original_priority = priority;
 	t->magic = THREAD_MAGIC;
+	
+	list_init (&t->donors);	// initialize donors
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
