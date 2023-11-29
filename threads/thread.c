@@ -14,6 +14,7 @@
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
+#include "devices/timer.h"	// timer_ticks warning 제거
 
 
 /* Random value for struct thread's `magic' member.
@@ -81,7 +82,7 @@ static tid_t allocate_tid (void);
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
 static struct list sleep_list;	// define sleep_list
-int64_t global_ticks;			// define global ticks
+static int64_t global_ticks;	// define global ticks
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -214,6 +215,8 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
+	yield_cpu();	// 현재 쓰레드의 우선순위와 비교해서 양보
+
 	return tid;
 }
 
@@ -247,9 +250,31 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, cmp_priority, NULL);	// 우선순위 고려
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
+}
+
+// 우선순위 비교 함수
+bool
+cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux UNUSED){
+	struct thread *curr_thread = list_entry(curr_elem, struct thread, elem);
+	struct thread *next_thread = list_entry(e, struct thread, elem);
+	if (curr_thread->priority > next_thread->priority)
+		return true;
+	else 
+		return false;
+}
+
+// CPU 양보 함수
+void 
+yield_cpu(void){
+	struct thread *curr = thread_current();		// 현재 쓰레드 선언
+	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
+	// 현재 쓰레드와 우선순위 비교
+	if (first->priority > curr->priority){
+		thread_yield();							// 현재 쓰레드가 더 크면 양보
+	}
 }
 
 /* Returns the name of the running thread. */
@@ -310,7 +335,7 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		list_insert_ordered(&ready_list, &curr->elem, cmp_priority, NULL);	// 양보해주고 우선순위 순으로 ready에 들어간다
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -329,9 +354,9 @@ thread_sleep (int64_t ticks){
 	if (curr->local_ticks < global_ticks)
 		global_ticks = curr->local_ticks;		// update global ticks
 
-	curr->local_ticks = ticks;					// local ticks 설정
-	list_push_back (&sleep_list, &curr->elem);	// sleep_list에 삽입하고
-	thread_block();								// BLOCKED로 바꾼다
+	curr->local_ticks = ticks;											// local ticks 설정
+	list_insert_ordered(&sleep_list, &curr->elem, cmp_priority, NULL);	// sleep_list에 삽입 (우선순위 고려)
+	thread_block();														// BLOCKED로 바꾼다
 	
 	intr_set_level (old_level);
 }
@@ -363,6 +388,8 @@ thread_wakeup (int64_t ticks){
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	list_sort(&ready_list, cmp_priority, NULL);	// 우선순위 바꾸고 재정렬
+	yield_cpu();								// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
