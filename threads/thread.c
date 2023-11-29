@@ -388,8 +388,17 @@ thread_wakeup (int64_t ticks){
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
-	list_sort(&ready_list, cmp_priority, NULL);	// 우선순위 바꾸고 재정렬
-	yield_cpu();								// 새로운 우선순위가 높은지 양보 확인
+	thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
+	
+	list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
+
+	// holder의 우선순위가 변경되었기 때문에 refresh
+	// if (!list_empty(&thread_current()->donors)){
+	// 	struct lock *holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, elem)->wait_on_lock;
+	// 	donate_priority(holding_lock);
+	// }
+	
+	yield_cpu();											// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
@@ -486,10 +495,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
-	t->original_priority = priority;
 	t->magic = THREAD_MAGIC;
 	
-	list_init (&t->donors);	// initialize donors
+	list_init (&t->donors);				// initialize donors
+	t->original_priority = priority;	// set original_priority
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

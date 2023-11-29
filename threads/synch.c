@@ -113,8 +113,10 @@ sema_up (struct semaphore *sema) {
 		thread_unblock (list_entry (list_pop_front (&sema->waiters),
 					struct thread, elem));
 	sema->value++;
-	intr_set_level (old_level);
+
 	yield_cpu();	// unblock 했기 때문에 양보 확인
+
+	intr_set_level (old_level);
 }
 
 static void sema_test_helper (void *sema_);
@@ -205,6 +207,7 @@ lock_acquire (struct lock *lock) {
 
 	sema_down (&lock->semaphore);		// blocking
 	lock->holder = thread_current();
+	lock->holder->wait_on_lock = NULL;	// holder가 되었기 때문에 wait_on_lock을 비워준다.
 }
 
 // 우선순위 비교 함수
@@ -224,7 +227,7 @@ donate_priority(struct lock *lock){
 	struct thread *first_donor;
 
 	if(!list_empty(&lock->holder->donors)){
-		list_sort(&lock->holder->donors, cmp_priority, NULL);	// 우선순위가 바뀌었을 수도 있기 때문에 재정렬
+		list_sort(&lock->holder->donors, cmp_d_priority, NULL);	// 우선순위가 바뀌었을 수도 있기 때문에 재정렬
 
 		holder_thread = lock->holder;
 		first_donor = list_entry(list_begin(&lock->holder->donors), struct thread, d_elem);
@@ -266,17 +269,24 @@ lock_try_acquire (struct lock *lock) {
    handler. */
 void
 lock_release (struct lock *lock) {
+	struct list_elem *e;
+
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	// remove
 	if(!list_empty(&lock->holder->donors)){
-		list_pop_front(&lock->holder->donors);	// pop front
-		donate_priority(lock);					// refresh
+		for(e=list_begin(&lock->holder->donors); e!=list_end(&lock->holder->donors); e=list_next(e)){
+			if(list_entry(e, struct thread, d_elem)->wait_on_lock == lock){
+				list_remove(e);
+			}
+		}
 	}
-	// list가 없을 경우 original_priority로 복구시킨다.
-	else{
+	// holder_priority refresh
+	if(!list_empty(&lock->holder->donors))
+		lock->holder->priority = list_entry(list_max(&lock->holder->donors, cmp_d_priority, NULL), struct thread, d_elem)->priority;
+	else
 		lock->holder->priority = lock->holder->original_priority;
-	}
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
