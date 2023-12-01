@@ -111,7 +111,9 @@ struct thread {
 
 	// mlfqs
 	struct list_elem m_elem;			// mlfqs_list의 elem
-	int nice;							// nice
+	struct list_elem all_elem;			// all_list의 elem
+	int nice;
+	int recent_cpu;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -186,7 +188,9 @@ int fp_mul_int (int x, int n);
 int fp_div_both (int x, int y);
 int fp_div_int (int x, int n);
 
+void update_priority(void);
 void update_load_avg(void);
+void plus_recent_cpu(void);
 void update_recent_cpu(void);
 
 #endif /* threads/thread.h */

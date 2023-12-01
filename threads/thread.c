@@ -87,7 +87,7 @@ static struct list sleep_list;	// define sleep_list
 static int64_t global_ticks;	// define global ticks
 
 static int load_avg;			// define load_avg
-static int recent_cpu;			// define recent_cpu
+struct list all_list;			// define all_list
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -121,9 +121,9 @@ thread_init (void) {
 	list_init (&destruction_req);
 
 	list_init (&sleep_list);  			// intialize sleep list
+	list_init (&all_list);				// intialize all list
 	global_ticks = timer_ticks ();		// intialize global_ticks
-	load_avg = INITIAL_LOAD_AVG;		// intialize load avg
-	recent_cpu = INITIAL_RECENT_CPU;	// intialize recent cpu
+	load_avg     = INITIAL_LOAD_AVG;	// intialize load avg
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -374,19 +374,16 @@ thread_wakeup (int64_t ticks){
 	// list_begin부터 탐색
 	struct list_elem *wakeup_elem = list_begin(&sleep_list);	
 	
-	// global_ticks를 지났을 때만 실행
-	if (global_ticks <= ticks){	
-		// list_end까지 탐색
-		while(wakeup_elem != list_end(&sleep_list)){
-			struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
-			
-			if (tmp->local_ticks <= ticks){
-				wakeup_elem = list_remove(wakeup_elem);		// sleep_list에서 삭제
-				thread_unblock(tmp);						// READY로 바꾸고 ready_list에 삽입
-			}
-			else{
-				wakeup_elem = list_next(wakeup_elem);
-			}
+	// list_end까지 탐색
+	while(wakeup_elem != list_end(&sleep_list)){
+		struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
+		
+		if (tmp->local_ticks <= ticks){
+			wakeup_elem = list_remove(wakeup_elem);		// sleep_list에서 삭제
+			thread_unblock(tmp);						// READY로 바꾸고 ready_list에 삽입
+		}
+		else{
+			wakeup_elem = list_next(wakeup_elem);
 		}
 	}
 }
@@ -418,29 +415,50 @@ thread_get_priority (void) {
 
 void
 update_priority(void){
-	struct thread *curr;
+	struct list_elem *e;
+	struct thread *e_thread;
+	int new_priority;
 	enum intr_level old_level;
 
 	old_level = intr_disable();
-
-	curr = thread_current();
-	//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
-	curr->priority = fp_to_int_near(fp_sub_both(fp_sub_both(int_to_fp(PRI_MAX), fp_div_both(recent_cpu, int_to_fp(4))),fp_mul_int(int_to_fp(2), curr->nice)));
+	
+	for (e=list_begin(&all_list); e!=list_end(&all_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, all_elem);
+		//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+		new_priority = fp_to_int_near(fp_sub_both(fp_sub_both(int_to_fp(PRI_MAX), fp_div_both(e_thread->recent_cpu, int_to_fp(4))),fp_mul_both(int_to_fp(e_thread->nice), int_to_fp(2))));
+		
+		if (new_priority < PRI_MIN)
+			e_thread->priority = PRI_MIN;
+		else if (new_priority > PRI_MAX)
+			e_thread->priority = PRI_MAX;
+		else
+			e_thread->priority = new_priority;
+	}
 	
 	intr_set_level(old_level);
 }
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) {
+thread_set_nice (int new_nice) {
 	/* TODO: Your implementation goes here */
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	
+	thread_current ()->nice = new_nice;
+	update_priority();
+	list_sort(&ready_list, cmp_priority, NULL);
+	thread_preept();
+
+	intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
@@ -466,11 +484,11 @@ update_load_avg(void){
 	old_level = intr_disable();
 
 	ready_threads_cnt = (int)list_size(&ready_list);
-	if (thread_current() != idle_thread)
+	if (running_thread() != idle_thread)
 		ready_threads_cnt += 1;
 
 	// load_avg = (59/60) * load_avg + (1/60) * ready_threads	
-	load_avg = fp_add_both(fp_mul_both(load_avg, fp_div_both(int_to_fp(59), int_to_fp(60)))
+	load_avg = fp_add_both(fp_mul_both(fp_div_both(int_to_fp(59), int_to_fp(60)), load_avg)
 				 			,fp_mul_int(fp_div_both(int_to_fp(1), int_to_fp(60)), ready_threads_cnt));
 
 	intr_set_level(old_level);
@@ -480,27 +498,37 @@ update_load_avg(void){
 int
 thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
-	int new_recent_cpu;
+	int int_recent_cpu;
 	enum intr_level old_level;
 
 	old_level = intr_disable();
-	new_recent_cpu = fp_to_int_near(fp_mul_int(recent_cpu, 100));
+	int_recent_cpu = fp_to_int_near(fp_mul_int(thread_current()->recent_cpu, 100));
 	intr_set_level(old_level);
 
-	return new_recent_cpu;
+	return int_recent_cpu;
+}
+
+void
+plus_recent_cpu(void){
+	if(running_thread() != idle_thread)
+		running_thread()->recent_cpu = fp_add_int(running_thread()->recent_cpu, 1);
 }
 
 void
 update_recent_cpu(void){
-	int current_nice;
+	struct list_elem *e;
+	struct thread *e_thread;
 	enum intr_level old_level;
 
 	old_level = intr_disable();
 	
-	current_nice = thread_current()->nice;
-	// recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
-	recent_cpu = fp_add_int(fp_mul_both(fp_div_both(fp_mul_both(int_to_fp(2), load_avg),fp_add_both(fp_mul_both(int_to_fp(2),load_avg),int_to_fp(1))), recent_cpu), current_nice);
-
+	for (e=list_begin(&all_list); e!=list_end(&all_list); e = list_next(e)){
+		// recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+		e_thread = list_entry(e, struct thread, all_elem);
+		e_thread->recent_cpu = fp_add_int(fp_mul_both(fp_div_both(fp_mul_both(int_to_fp(2), load_avg),fp_add_both(fp_mul_both(int_to_fp(2), load_avg),int_to_fp(1)))
+												, e_thread->recent_cpu), e_thread->nice);
+	}
+	
 	intr_set_level(old_level);
 }
 
@@ -567,11 +595,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 
-	list_init (&t->donors);				// initialize donors
-	t->wait_on_lock = NULL;				// initialize wait_on_lock
-	t->original_priority = priority;	// set original_priority
+	list_init (&t->donors);						// initialize donors
+	t->wait_on_lock = NULL;						// initialize wait_on_lock
+	t->original_priority = priority;			// set original_priority
 
-	t->nice = INITIAL_NICE;				// initialize INITIAL_NICE
+	t->nice = INITIAL_NICE;						// initialize INITIAL_NICE
+	t->recent_cpu = INITIAL_RECENT_CPU;			// intialize recent cpu
+	
+	list_push_back(&all_list, &t->all_elem);	// recent_cpu를 위한 all_list
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -731,6 +762,7 @@ schedule (void) {
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
 			list_push_back (&destruction_req, &curr->elem);
+			list_remove(&curr->all_elem);					// 죽기 전에는 all_list에서 제거
 		}
 
 		/* Before switching the thread, we first save the information
