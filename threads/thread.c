@@ -30,6 +30,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct multiple_ready_queue multiple_ready_queues[64];	// multi level ready list의 리스트
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -114,6 +116,13 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+
+	if (!thread_mlfqs){
+		for(int i = 0; i < 64; i++){
+			multiple_ready_queues[i].priority = i;
+			list_init(&multiple_ready_queues[i].ready_queue);	// initalize mlfqs_list
+		}
+	}
 
 	list_init (&sleep_list);  		// intialize sleep list
 	global_ticks = timer_ticks ();	// intialize global_ticks
@@ -390,16 +399,17 @@ thread_set_priority (int new_priority) {
 	struct lock *holding_lock;
 
 	thread_current ()->priority = new_priority;
-	thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
-	
-	list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
+	if(!thread_mlfqs){
+		thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
+		
+		list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
 
-	// holder의 우선순위가 변경되었기 때문에 refresh
-	if (!list_empty(&thread_current()->donors)){
-		holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
-		refresh_lock(holding_lock);
+		// holder의 우선순위가 변경되었기 때문에 refresh
+		if (!list_empty(&thread_current()->donors)){
+			holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
+			refresh_lock(holding_lock);
+		}
 	}
-	
 	thread_preept();										// 새로운 우선순위가 높은지 양보 확인
 }
 
@@ -498,7 +508,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
-	
+
 	list_init (&t->donors);				// initialize donors
 	t->wait_on_lock = NULL;				// initialize wait_on_lock
 	t->original_priority = priority;	// set original_priority

@@ -197,20 +197,24 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!lock_held_by_current_thread (lock));
 
 	// non available
-	if((&lock->semaphore)->value <= 0){
-		// store address of the lock
-		curr->wait_on_lock = lock;
+	if(!thread_mlfqs){
+		if((&lock->semaphore)->value <= 0){
+			// store address of the lock
+			curr->wait_on_lock = lock;
 
-		// maintain donated threads
-		list_insert_ordered(&lock->holder->donors, &curr->d_elem, cmp_d_priority, NULL);
+			// maintain donated threads
+			list_insert_ordered(&lock->holder->donors, &curr->d_elem, cmp_d_priority, NULL);
 
-		// Store current priority
-		donate_priority(lock);
+			// Store current priority
+			donate_priority(lock);
+		}
 	}
+
 	sema_down (&lock->semaphore);		// blocking
 	lock->holder = thread_current();
 	lock->holder->wait_on_lock = NULL;	// holder가 되었기 때문에 wait_on_lock을 비워준다.
 }
+
 
 // 우선순위 비교 함수
 bool

@@ -93,12 +93,17 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	// timer.c
 	int64_t local_ticks;				// local ticks 추가
 
+	// donate
 	int original_priority;				// original_priority
 	struct lock *wait_on_lock;			// 기다리고 있는 lock
 	struct list donors;					// waiters와 같다
 	struct list_elem d_elem;			// elem과 같다
+
+	// mlfqs
+	struct list_elem m_elem;			// mlfqs_list의 elem
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -115,6 +120,11 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+};
+
+struct multiple_ready_queue {
+	int priority; 
+	struct list ready_queue;
 };
 
 /* If false (default), use round-robin scheduler.
