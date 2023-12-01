@@ -86,6 +86,9 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 static struct list sleep_list;	// define sleep_list
 static int64_t global_ticks;	// define global ticks
 
+static int load_avg;			// define load_avg
+static int recent_cpu;			// define recent_cpu
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -117,8 +120,10 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	list_init (&sleep_list);  		// intialize sleep list
-	global_ticks = timer_ticks ();	// intialize global_ticks
+	list_init (&sleep_list);  			// intialize sleep list
+	global_ticks = timer_ticks ();		// intialize global_ticks
+	load_avg = INITIAL_LOAD_AVG;		// intialize load avg
+	recent_cpu = INITIAL_RECENT_CPU;	// intialize recent cpu
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -389,19 +394,18 @@ thread_wakeup (int64_t ticks){
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	if(thread_mlfqs) return;	// mlfqs일 경우 모두 무시
+
 	struct lock *holding_lock;
 
 	thread_current ()->priority = new_priority;
-	if(!thread_mlfqs){
-		thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
-		
-		list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
+	thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
+	list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
 
-		// holder의 우선순위가 변경되었기 때문에 refresh
-		if (!list_empty(&thread_current()->donors)){
-			holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
-			refresh_lock(holding_lock);
-		}
+	// holder의 우선순위가 변경되었기 때문에 refresh
+	if (!list_empty(&thread_current()->donors)){
+		holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
+		refresh_lock(holding_lock);
 	}
 	thread_preept();										// 새로운 우선순위가 높은지 양보 확인
 }
@@ -410,6 +414,20 @@ thread_set_priority (int new_priority) {
 int
 thread_get_priority (void) {
 	return thread_current ()->priority;
+}
+
+void
+update_priority(void){
+	struct thread *curr;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+
+	curr = thread_current();
+	//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+	curr->priority = fp_to_int_near(fp_sub_both(fp_sub_both(int_to_fp(PRI_MAX), fp_div_both(recent_cpu, int_to_fp(4))),fp_mul_int(int_to_fp(2), curr->nice)));
+	
+	intr_set_level(old_level);
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -429,14 +447,61 @@ thread_get_nice (void) {
 int
 thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	int int_load_avg;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+
+	int_load_avg = fp_to_int_near(fp_mul_int(load_avg, 100));
+	intr_set_level(old_level);
+
+	return int_load_avg;
+}
+
+void
+update_load_avg(void){
+	int ready_threads_cnt;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+
+	ready_threads_cnt = (int)list_size(&ready_list);
+	if (thread_current() != idle_thread)
+		ready_threads_cnt += 1;
+
+	// load_avg = (59/60) * load_avg + (1/60) * ready_threads	
+	load_avg = fp_add_both(fp_mul_both(load_avg, fp_div_both(int_to_fp(59), int_to_fp(60)))
+				 			,fp_mul_int(fp_div_both(int_to_fp(1), int_to_fp(60)), ready_threads_cnt));
+
+	intr_set_level(old_level);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	int new_recent_cpu;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	new_recent_cpu = fp_to_int_near(fp_mul_int(recent_cpu, 100));
+	intr_set_level(old_level);
+
+	return new_recent_cpu;
+}
+
+void
+update_recent_cpu(void){
+	int current_nice;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	
+	current_nice = thread_current()->nice;
+	// recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+	recent_cpu = fp_add_int(fp_mul_both(fp_div_both(fp_mul_both(int_to_fp(2), load_avg),fp_add_both(fp_mul_both(int_to_fp(2),load_avg),int_to_fp(1))), recent_cpu), current_nice);
+
+	intr_set_level(old_level);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -505,6 +570,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init (&t->donors);				// initialize donors
 	t->wait_on_lock = NULL;				// initialize wait_on_lock
 	t->original_priority = priority;	// set original_priority
+
+	t->nice = INITIAL_NICE;				// initialize INITIAL_NICE
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -683,4 +750,63 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+// fixed-point operator
+int
+int_to_fp (int n){
+    return n * F;
+}
+
+int
+fp_to_int_zero (int x){
+    return x / F;
+}
+
+int
+fp_to_int_near (int x){
+    if (x >= 0)
+        return (x + F / 2) / F;
+    else
+        return (x - F / 2) / F;
+}
+
+int
+fp_add_both (int x, int y){
+    return x + y;
+}
+
+int
+fp_sub_both (int x, int y){
+    return x - y;
+}
+
+int
+fp_add_int (int x, int n){
+    return x + (n * F);
+}
+
+int
+fp_sub_int (int x, int n){
+    return x - (n * F);
+}
+
+int
+fp_mul_both (int x, int y){
+    return 	(int)((((int64_t)x) * y) / F);
+}
+
+int
+fp_mul_int (int x, int n){
+    return x * n;
+}
+
+int
+fp_div_both (int x, int y){
+    return 	(int)((((int64_t)x) * F) / y);
+}
+
+int
+fp_div_int (int x, int n){
+    return x / n;
 }
