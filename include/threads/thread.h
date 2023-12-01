@@ -8,6 +8,7 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+#include "threads/synch.h"	// lock 자료구조 사용
 
 
 /* States in a thread's life cycle. */
@@ -91,7 +92,13 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
+
 	int64_t local_ticks;				// local ticks 추가
+
+	int original_priority;				// original_priority
+	struct lock *wait_on_lock;			// 기다리고 있는 lock
+	struct list donors;					// waiters와 같다
+	struct list_elem d_elem;			// elem과 같다
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -148,6 +155,6 @@ void thread_sleep (int64_t ticks);
 void thread_wakeup (int64_t ticks);
 
 bool cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare priority
-void yield_cpu(void);
+void thread_preept(void);
 
 #endif /* threads/thread.h */
