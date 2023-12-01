@@ -123,7 +123,6 @@ struct thread {
 };
 
 struct multiple_ready_queue {
-	int priority; 
 	struct list ready_queue;
 };
 

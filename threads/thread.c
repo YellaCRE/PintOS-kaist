@@ -117,13 +117,6 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	if (!thread_mlfqs){
-		for(int i = 0; i < 64; i++){
-			multiple_ready_queues[i].priority = i;
-			list_init(&multiple_ready_queues[i].ready_queue);	// initalize mlfqs_list
-		}
-	}
-
 	list_init (&sleep_list);  		// intialize sleep list
 	global_ticks = timer_ticks ();	// intialize global_ticks
 

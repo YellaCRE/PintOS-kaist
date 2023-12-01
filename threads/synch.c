@@ -278,11 +278,12 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
-	// remove
-	remove_lock(lock);
-
-	// holder_priority refresh
-	refresh_lock(lock);
+	if(!thread_mlfqs){
+		// remove
+		remove_lock(lock);
+		// holder_priority refresh
+		refresh_lock(lock);
+	}
 
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
