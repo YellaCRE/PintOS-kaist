@@ -117,7 +117,7 @@ sema_up (struct semaphore *sema) {
 
 	sema->value++;
 
-	thread_preept();	// unblock 했기 때문에 양보 확인
+	thread_preempt();	// unblock 했기 때문에 양보 확인
 
 	intr_set_level (old_level);
 }

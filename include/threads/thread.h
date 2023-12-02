@@ -174,7 +174,7 @@ void thread_sleep (int64_t ticks);
 void thread_wakeup (int64_t ticks);
 
 bool cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare priority
-void thread_preept(void);
+void thread_preempt(void);
 
 int int_to_fp (int n);
 int fp_to_int_zero (int x);

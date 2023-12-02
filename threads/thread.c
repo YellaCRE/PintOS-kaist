@@ -222,7 +222,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	thread_preept();	// 현재 쓰레드의 우선순위와 비교해서 양보
+	thread_preempt();	// 현재 쓰레드의 우선순위와 비교해서 양보
 
 	return tid;
 }
@@ -275,7 +275,7 @@ cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void 
 
 // 선점형 스케쥴러 구현
 void 
-thread_preept(void){
+thread_preempt(void){
 	struct thread *curr = thread_current();		// 현재 쓰레드 선언
 	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
 	// 현재 쓰레드와 우선순위 비교
@@ -374,16 +374,19 @@ thread_wakeup (int64_t ticks){
 	// list_begin부터 탐색
 	struct list_elem *wakeup_elem = list_begin(&sleep_list);	
 	
+	// global_ticks를 지났을 때만 실행
+	if (global_ticks <= ticks){	
 	// list_end까지 탐색
-	while(wakeup_elem != list_end(&sleep_list)){
-		struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
-		
-		if (tmp->local_ticks <= ticks){
-			wakeup_elem = list_remove(wakeup_elem);		// sleep_list에서 삭제
-			thread_unblock(tmp);						// READY로 바꾸고 ready_list에 삽입
-		}
-		else{
-			wakeup_elem = list_next(wakeup_elem);
+		while(wakeup_elem != list_end(&sleep_list)){
+			struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
+			
+			if (tmp->local_ticks <= ticks){
+				wakeup_elem = list_remove(wakeup_elem);		// sleep_list에서 삭제
+				thread_unblock(tmp);						// READY로 바꾸고 ready_list에 삽입
+			}
+			else{
+				wakeup_elem = list_next(wakeup_elem);
+			}
 		}
 	}
 }
@@ -404,7 +407,7 @@ thread_set_priority (int new_priority) {
 		holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
 		refresh_lock(holding_lock);
 	}
-	thread_preept();										// 새로운 우선순위가 높은지 양보 확인
+	thread_preempt();										// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
@@ -449,7 +452,7 @@ thread_set_nice (int new_nice) {
 	thread_current ()->nice = new_nice;
 	update_priority();
 	list_sort(&ready_list, cmp_priority, NULL);
-	thread_preept();
+	thread_preempt();
 
 	intr_set_level(old_level);
 }
