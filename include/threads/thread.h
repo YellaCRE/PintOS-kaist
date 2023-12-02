@@ -10,6 +10,9 @@
 #endif
 #include "threads/synch.h"	// lock 자료구조 사용
 
+#define F (1 << 14)
+// x, y는 fixed-point, n은 integer
+
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -28,6 +31,10 @@ typedef int tid_t;
 #define PRI_MIN 0                       /* Lowest priority. */
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
+
+#define INITIAL_LOAD_AVG 0				// define INTIAL_LOAD_AVG
+#define INITIAL_RECENT_CPU 0			// define INTIAL_RECENT_CPU
+#define INITIAL_NICE 0					// define INITIAL_NICE
 
 /* A kernel thread or user process.
  *
@@ -93,12 +100,20 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int priority;                       /* Priority. */
 
+	// timer.c
 	int64_t local_ticks;				// local ticks 추가
 
+	// donate
 	int original_priority;				// original_priority
 	struct lock *wait_on_lock;			// 기다리고 있는 lock
 	struct list donors;					// waiters와 같다
 	struct list_elem d_elem;			// elem과 같다
+
+	// mlfqs
+	struct list_elem m_elem;			// mlfqs_list의 elem
+	struct list_elem all_elem;			// all_list의 elem
+	int nice;
+	int recent_cpu;
 
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
@@ -115,6 +130,10 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+};
+
+struct multiple_ready_queue {
+	struct list ready_queue;
 };
 
 /* If false (default), use round-robin scheduler.
@@ -155,6 +174,23 @@ void thread_sleep (int64_t ticks);
 void thread_wakeup (int64_t ticks);
 
 bool cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void *aux);	// compare priority
-void thread_preept(void);
+void thread_preempt(void);
+
+int int_to_fp (int n);
+int fp_to_int_zero (int x);
+int fp_to_int_near (int x);
+int fp_add_both (int x, int y);
+int fp_sub_both (int x, int y);
+int fp_add_int (int x, int n);
+int fp_sub_int (int x, int n);
+int fp_mul_both (int x, int y);
+int fp_mul_int (int x, int n);
+int fp_div_both (int x, int y);
+int fp_div_int (int x, int n);
+
+void update_priority(void);
+void update_load_avg(void);
+void plus_recent_cpu(void);
+void update_recent_cpu(void);
 
 #endif /* threads/thread.h */

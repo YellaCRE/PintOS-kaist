@@ -30,6 +30,8 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+static struct multiple_ready_queue multiple_ready_queues[64];	// multi level ready list의 리스트
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -84,6 +86,9 @@ static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 static struct list sleep_list;	// define sleep_list
 static int64_t global_ticks;	// define global ticks
 
+static int load_avg;			// define load_avg
+struct list all_list;			// define all_list
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -115,8 +120,10 @@ thread_init (void) {
 	list_init (&ready_list);
 	list_init (&destruction_req);
 
-	list_init (&sleep_list);  		// intialize sleep list
-	global_ticks = timer_ticks ();	// intialize global_ticks
+	list_init (&sleep_list);  			// intialize sleep list
+	list_init (&all_list);				// intialize all list
+	global_ticks = timer_ticks ();		// intialize global_ticks
+	load_avg     = INITIAL_LOAD_AVG;	// intialize load avg
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
@@ -215,7 +222,7 @@ thread_create (const char *name, int priority,
 	/* Add to run queue. */
 	thread_unblock (t);
 
-	thread_preept();	// 현재 쓰레드의 우선순위와 비교해서 양보
+	thread_preempt();	// 현재 쓰레드의 우선순위와 비교해서 양보
 
 	return tid;
 }
@@ -268,7 +275,7 @@ cmp_priority(const struct list_elem *curr_elem, const struct list_elem *e, void 
 
 // 선점형 스케쥴러 구현
 void 
-thread_preept(void){
+thread_preempt(void){
 	struct thread *curr = thread_current();		// 현재 쓰레드 선언
 	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
 	// 현재 쓰레드와 우선순위 비교
@@ -369,7 +376,7 @@ thread_wakeup (int64_t ticks){
 	
 	// global_ticks를 지났을 때만 실행
 	if (global_ticks <= ticks){	
-		// list_end까지 탐색
+	// list_end까지 탐색
 		while(wakeup_elem != list_end(&sleep_list)){
 			struct thread *tmp = list_entry(wakeup_elem, struct thread, elem);
 			
@@ -387,11 +394,12 @@ thread_wakeup (int64_t ticks){
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
+	if(thread_mlfqs) return;	// mlfqs일 경우 모두 무시
+
 	struct lock *holding_lock;
 
 	thread_current ()->priority = new_priority;
 	thread_current ()->original_priority = new_priority;	// lock release에서 original로 복구되기 때문에 여기도 바꾼다
-	
 	list_sort(&ready_list, cmp_priority, NULL);				// 우선순위 바꾸고 재정렬
 
 	// holder의 우선순위가 변경되었기 때문에 refresh
@@ -399,8 +407,7 @@ thread_set_priority (int new_priority) {
 		holding_lock = list_entry(list_begin(&thread_current()->donors), struct thread, d_elem)->wait_on_lock;
 		refresh_lock(holding_lock);
 	}
-	
-	thread_preept();										// 새로운 우선순위가 높은지 양보 확인
+	thread_preempt();										// 새로운 우선순위가 높은지 양보 확인
 }
 
 /* Returns the current thread's priority. */
@@ -409,31 +416,123 @@ thread_get_priority (void) {
 	return thread_current ()->priority;
 }
 
+void
+update_priority(void){
+	struct list_elem *e;
+	struct thread *e_thread;
+	int new_priority;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	
+	for (e=list_begin(&all_list); e!=list_end(&all_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, all_elem);
+		//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+		new_priority = fp_to_int_near(fp_sub_both(fp_sub_both(int_to_fp(PRI_MAX), fp_div_both(e_thread->recent_cpu, int_to_fp(4))),fp_mul_both(int_to_fp(e_thread->nice), int_to_fp(2))));
+		
+		if (new_priority < PRI_MIN)
+			e_thread->priority = PRI_MIN;
+		else if (new_priority > PRI_MAX)
+			e_thread->priority = PRI_MAX;
+		else
+			e_thread->priority = new_priority;
+	}
+	
+	intr_set_level(old_level);
+}
+
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) {
+thread_set_nice (int new_nice) {
 	/* TODO: Your implementation goes here */
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	
+	thread_current ()->nice = new_nice;
+	update_priority();
+	list_sort(&ready_list, cmp_priority, NULL);
+	thread_preempt();
+
+	intr_set_level(old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	return thread_current ()->nice;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	int int_load_avg;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+
+	int_load_avg = fp_to_int_near(fp_mul_int(load_avg, 100));
+	intr_set_level(old_level);
+
+	return int_load_avg;
+}
+
+void
+update_load_avg(void){
+	int ready_threads_cnt;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+
+	ready_threads_cnt = (int)list_size(&ready_list);
+	if (running_thread() != idle_thread)
+		ready_threads_cnt += 1;
+
+	// load_avg = (59/60) * load_avg + (1/60) * ready_threads	
+	load_avg = fp_add_both(fp_mul_both(fp_div_both(int_to_fp(59), int_to_fp(60)), load_avg)
+				 			,fp_mul_int(fp_div_both(int_to_fp(1), int_to_fp(60)), ready_threads_cnt));
+
+	intr_set_level(old_level);
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
 	/* TODO: Your implementation goes here */
-	return 0;
+	int int_recent_cpu;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	int_recent_cpu = fp_to_int_near(fp_mul_int(thread_current()->recent_cpu, 100));
+	intr_set_level(old_level);
+
+	return int_recent_cpu;
+}
+
+void
+plus_recent_cpu(void){
+	if(running_thread() != idle_thread)
+		running_thread()->recent_cpu = fp_add_int(running_thread()->recent_cpu, 1);
+}
+
+void
+update_recent_cpu(void){
+	struct list_elem *e;
+	struct thread *e_thread;
+	enum intr_level old_level;
+
+	old_level = intr_disable();
+	
+	for (e=list_begin(&all_list); e!=list_end(&all_list); e = list_next(e)){
+		// recent_cpu = (2 * load_avg) / (2 * load_avg + 1) * recent_cpu + nice
+		e_thread = list_entry(e, struct thread, all_elem);
+		e_thread->recent_cpu = fp_add_int(fp_mul_both(fp_div_both(fp_mul_both(int_to_fp(2), load_avg),fp_add_both(fp_mul_both(int_to_fp(2), load_avg),int_to_fp(1)))
+												, e_thread->recent_cpu), e_thread->nice);
+	}
+	
+	intr_set_level(old_level);
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -498,10 +597,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	list_init (&t->donors);						// initialize donors
+	t->wait_on_lock = NULL;						// initialize wait_on_lock
+	t->original_priority = priority;			// set original_priority
+
+	t->nice = INITIAL_NICE;						// initialize INITIAL_NICE
+	t->recent_cpu = INITIAL_RECENT_CPU;			// intialize recent cpu
 	
-	list_init (&t->donors);				// initialize donors
-	t->wait_on_lock = NULL;				// initialize wait_on_lock
-	t->original_priority = priority;	// set original_priority
+	list_push_back(&all_list, &t->all_elem);	// recent_cpu를 위한 all_list
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -661,6 +765,7 @@ schedule (void) {
 		if (curr && curr->status == THREAD_DYING && curr != initial_thread) {
 			ASSERT (curr != next);
 			list_push_back (&destruction_req, &curr->elem);
+			list_remove(&curr->all_elem);					// 죽기 전에는 all_list에서 제거
 		}
 
 		/* Before switching the thread, we first save the information
@@ -680,4 +785,63 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+// fixed-point operator
+int
+int_to_fp (int n){
+    return n * F;
+}
+
+int
+fp_to_int_zero (int x){
+    return x / F;
+}
+
+int
+fp_to_int_near (int x){
+    if (x >= 0)
+        return (x + F / 2) / F;
+    else
+        return (x - F / 2) / F;
+}
+
+int
+fp_add_both (int x, int y){
+    return x + y;
+}
+
+int
+fp_sub_both (int x, int y){
+    return x - y;
+}
+
+int
+fp_add_int (int x, int n){
+    return x + (n * F);
+}
+
+int
+fp_sub_int (int x, int n){
+    return x - (n * F);
+}
+
+int
+fp_mul_both (int x, int y){
+    return 	(int)((((int64_t)x) * y) / F);
+}
+
+int
+fp_mul_int (int x, int n){
+    return x * n;
+}
+
+int
+fp_div_both (int x, int y){
+    return 	(int)((((int64_t)x) * F) / y);
+}
+
+int
+fp_div_int (int x, int n){
+    return x / n;
 }
