@@ -87,17 +87,19 @@ typedef int tid_t;
  * blocked state is on a semaphore wait list. */
 struct thread {
 	/* Owned by thread.c. */
-	tid_t tid;                          /* Thread identifier. */
-	enum thread_status status;          /* Thread state. */
-	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
+	tid_t tid;                          /* Thread identifier. : 쓰레드 식별자 */
+	enum thread_status status;          /* Thread state. : 쓰레드의 상태 */
+	// 열거형 상수 중 하나로 초기화 가능
+	char name[16];                      /* Name (for debugging purposes). : 디버깅 목적으로 사용되는 이름 */
+	int priority;                       /* Priority. : 쓰레드의 우선순위 */
 
-	int64_t wakeup_ticks;				// 일어날 시각 추가**
+	int64_t wakeup_ticks;				// 일어날 시각(추가)
 
-	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
+	/* Shared between thread.c and synch.c. : 쓰레드.c와 synch.c 간 공유 */
+	struct list_elem elem;              /* List element. : 연결리스트 */
 
 #ifdef USERPROG
+// USERPROG가 정의 되었다면 컴파일됨(ifdef)
 	/* Owned by userprog/process.c. */
 	uint64_t *pml4;                     /* Page map level 4 */
 #endif
@@ -107,8 +109,8 @@ struct thread {
 #endif
 
 	/* Owned by thread.c. */
-	struct intr_frame tf;               /* Information for switching */
-	unsigned magic;                     /* Detects stack overflow. */
+	struct intr_frame tf;               /* Information for switching : 인터럽트 시 프로세서의 데이터를 저장 */
+	unsigned magic;                     /* Detects stack overflow. : 스택 오버플로우 감지 */
 };
 
 /* If false (default), use round-robin scheduler.
@@ -147,7 +149,12 @@ int thread_get_load_avg (void);
 
 void thread_wakeup(int64_t global_ticks);
 
+// sleep_list에 일어날 시간이 이른 스레드가 앞부분에 위치하도록 정렬할 때 사용하는 정렬 함수
 bool cmp_thread_ticks(const struct list_elem *a, const struct list_elem *b, void *aux);
+
+bool cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
+
+void preempt_priority(void);
 
 void do_iret (struct intr_frame *tf);
 

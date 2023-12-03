@@ -64,6 +64,7 @@ list_init (struct list *list) {
 }
 
 /* Returns the beginning of LIST.  */
+// 리스트의 시작 부분을 반환
 struct list_elem *
 list_begin (struct list *list) {
 	ASSERT (list != NULL);

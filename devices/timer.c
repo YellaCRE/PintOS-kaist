@@ -71,6 +71,7 @@ timer_calibrate (void) {
 }
 
 /* Returns the number of timer ticks since the OS booted. */
+// 현재 진행되고 있는 tick의 값을 반환
 int64_t
 timer_ticks (void) {
 	enum intr_level old_level = intr_disable ();
@@ -82,6 +83,7 @@ timer_ticks (void) {
 
 /* Returns the number of timer ticks elapsed since THEN, which
    should be a value once returned by timer_ticks(). */
+// 인자의 then의 tick 이후 몇 tick이 지났는지 반환
 int64_t
 timer_elapsed (int64_t then) {
 	return timer_ticks () - then;
@@ -94,10 +96,12 @@ timer_sleep (int64_t ticks) {
 
 	ASSERT (intr_get_level () == INTR_ON);
 
+	// 변경전 스레드 재우기 로직 : 잠든 스레드를 ready_list에 삽입
 	// while (timer_elapsed (start) < ticks)
 	// 	thread_yield ();
 
-	thread_sleep(start + ticks);				// 현재 시각 + 잠들 시간
+	thread_sleep(start + ticks);				// 현재 시각(start) + 잠들 시간(ticks)
+	// 잠든 스레드를 sleep_list에 삽입하는 함수
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -123,8 +127,10 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
+// 매 tick마다 깨울 쓰레드가 있는지 확인
+// 일어날 시간이 된 스레드를 ready_list로 이동시키는 함수 thread_wakeup()을 호출
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;

@@ -84,6 +84,7 @@
 #include <stdint.h>
 
 /* List element. */
+// 재귀식으로 선언된 구조체
 struct list_elem {
 	struct list_elem *prev;     /* Previous list element. */
 	struct list_elem *next;     /* Next list element. */
@@ -100,11 +101,14 @@ struct list {
    name of the outer structure STRUCT and the member name MEMBER
    of the list element.  See the big comment at the top of the
    file for an example. */
+// 정확히 무슨 역할을 하는 매크로인지 잘 읽히지는 않음
+// LIST_ELEM(노드)이 속한 구조체의 주소를 얻는 매크로
 #define list_entry(LIST_ELEM, STRUCT, MEMBER)           \
 	((STRUCT *) ((uint8_t *) &(LIST_ELEM)->next     \
 		- offsetof (STRUCT, MEMBER.next)))
 
 void list_init (struct list *);
+// 리스트를 초기화
 
 /* List traversal. */
 struct list_elem *list_begin (struct list *);
@@ -123,12 +127,18 @@ void list_insert (struct list_elem *, struct list_elem *);
 void list_splice (struct list_elem *before,
 		struct list_elem *first, struct list_elem *last);
 void list_push_front (struct list *, struct list_elem *);
+// elem을 리스트 처음에 삽입
+
 void list_push_back (struct list *, struct list_elem *);
+// elem을 리스트 끝에 삽입
 
 /* List removal. */
 struct list_elem *list_remove (struct list_elem *);
 struct list_elem *list_pop_front (struct list *);
+// 리스트 처음에 list_elem을 반환
+
 struct list_elem *list_pop_back (struct list *);
+// 리스트 끝에 list_elem을 반환
 
 /* List elements. */
 struct list_elem *list_front (struct list *);
