@@ -98,6 +98,12 @@ struct thread {
 	/* Shared between thread.c and synch.c. : 쓰레드.c와 synch.c 간 공유 */
 	struct list_elem elem;              /* List element. : 연결리스트 */
 
+	//👇🏻 추가한 내용
+    int init_priority;
+    struct lock *wait_on_lock;
+    struct list donations;
+    struct list_elem donation_elem;
+
 #ifdef USERPROG
 // USERPROG가 정의 되었다면 컴파일됨(ifdef)
 	/* Owned by userprog/process.c. */
@@ -156,8 +162,16 @@ bool cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, v
 
 bool cmp_sema_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
 
+bool cmp_donation_priority(const struct list_elem *a, const struct list_elem *b, void *aux);
+
 void preempt_priority(void);
 
+void donate_priority(void);
+
 void do_iret (struct intr_frame *tf);
+
+void remove_donor(struct lock *lock);
+
+void update_priority_before_donations(void);
 
 #endif /* threads/thread.h */
