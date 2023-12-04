@@ -188,31 +188,34 @@ bool cmp_thread_ticks(const struct list_elem *a, const struct list_elem *b, void
 	return st_a->wakeup_ticks < st_b->wakeup_ticks;
 }
 
-bool cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED) {
-	struct thread *st_a = list_entry(a, struct thread, elem);
-	struct thread *st_b = list_entry(b, struct thread, elem);
-	return st_a->priority > st_b->priority;
+bool cmp_thread_priority(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+    struct thread *st_a = list_entry(a, struct thread, elem);
+    struct thread *st_b = list_entry(b, struct thread, elem);
+    return st_a->priority > st_b->priority;
 }
 
 // sleep_list의 스레드들이 일어날 시간이 되면 ready_list로 이동시킨다
-void
-thread_wakeup(int64_t current_ticks) {
-	enum intr_level old_level;
-	old_level = intr_disable();			//인터럽트 비활성
+void thread_wakeup(int64_t current_ticks)
+{
+    enum intr_level old_level;
+    old_level = intr_disable(); // 인터럽트 비활성
 
-	struct list_elem *curr_elem = list_begin(&sleep_list);
-	while(curr_elem != list_end(&sleep_list)) {
-		struct thread *curr_thread = list_entry(curr_elem, struct thread, elem);	// 현재 검사중인 elem의 쓰레드
+    struct list_elem *curr_elem = list_begin(&sleep_list);
+    while (curr_elem != list_end(&sleep_list))
+    {
+        struct thread *curr_thread = list_entry(curr_elem, struct thread, elem); // 현재 검사중인 elem의 스레드
 
-		if(current_ticks >= curr_thread->wakeup_ticks) {		// 깰 시간이 됐으면
-			curr_elem = list_remove(curr_elem);		// sleep_list에서 제거, crr_elem에는 다음elem이 담김
-			thread_unblock(curr_thread);			// ready_list로 이동
-			preempt_priority();
-		}
-		else
-			break;
-	}
-	intr_set_level(old_level);		// 인터럽트 상태를 원래 상태로 변경
+        if (current_ticks >= curr_thread->wakeup_ticks) // 깰 시간이 됐으면
+        {
+            curr_elem = list_remove(curr_elem); // sleep_list에서 제거, curr_elem에는 다음 elem이 담김
+            thread_unblock(curr_thread);        // ready_list로 이동
+            preempt_priority();
+        }
+        else
+            break;
+    }
+    intr_set_level(old_level); // 인터럽트 상태를 원래 상태로 변경
 }
 
 /* Prints thread statistics. */
@@ -266,8 +269,8 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 	/* Add to run queue. */
-	thread_unblock (t);
-	preempt_priority();
+    thread_unblock(t);
+    preempt_priority();
 
 	return tid;
 }
@@ -381,25 +384,24 @@ thread_yield (void) {
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
 // 현재 스레드의 우선순위를 new_priority로 재설정
-void
-thread_set_priority (int new_priority) {
-	thread_current()->priority = new_priority;
-	preempt_priority();
+void thread_set_priority(int new_priority)
+{
+    thread_current()->init_priority = new_priority;
+    update_priority_for_donations();
+    preempt_priority();
 }
 
 // ready_list에 있는 스레드의 priority가 현재 실행중인 스레드의 priority 보다 높으면 양보하는 함수
-void preempt_priority(void) {
-	if(thread_current() == idle_thread)
-		return;
-	
-	if(list_empty(&ready_list))
-		return;
-
-	struct thread *curr = thread_current();
-	struct thread *ready = list_entry(list_front(&ready_list), struct thread, elem);
-	
-	if(curr->priority < ready->priority)			// ready_list에 실행중인 스레드보다 우선순위가 높은 스레드가 있으면
-		thread_yield();
+void preempt_priority(void)
+{
+    if (thread_current() == idle_thread)
+        return;
+    if (list_empty(&ready_list))
+        return;
+    struct thread *curr = thread_current();
+    struct thread *ready = list_entry(list_front(&ready_list), struct thread, elem);
+    if (curr->priority < ready->priority) // ready_list에 현재 실행중인 스레드보다 우선순위가 높은 스레드가 있으면
+        thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -497,6 +499,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+
+	//👇🏻 추가한 내용
+    t->init_priority = priority;
+    t->wait_on_lock = NULL;
+    list_init(&(t->donations));
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
