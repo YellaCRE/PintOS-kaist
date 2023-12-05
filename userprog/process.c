@@ -21,6 +21,8 @@
 #ifdef VM
 #include "vm/vm.h"
 #endif
+// 구분자를 공백으로 설정
+#define DELIM_CHARS	" "
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -184,6 +186,8 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
+	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
+	printf("====여기까지는 옵니다!====\n");
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -204,6 +208,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while (1) {}
 	return -1;
 }
 
@@ -328,6 +333,18 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	
+	char *argv[128];
+	char *ptr, *next_ptr;
+	int argc = 0;
+ 
+	ptr = strtok_r(file_name, DELIM_CHARS, &next_ptr);
+	argv[argc] = ptr;
+	while (ptr) {
+		ptr = strtok_r(NULL, DELIM_CHARS, &next_ptr);
+		argc++;
+		argv[argc] = ptr;
+	}
 
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -336,12 +353,12 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	/* Open executable file. */
-	file = filesys_open (file_name);
+	file = filesys_open (argv[0]);
 	if (file == NULL) {
-		printf ("load: %s: open failed\n", file_name);
+		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
 	}
-
+	
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -350,7 +367,7 @@ load (const char *file_name, struct intr_frame *if_) {
 			|| ehdr.e_version != 1
 			|| ehdr.e_phentsize != sizeof (struct Phdr)
 			|| ehdr.e_phnum > 1024) {
-		printf ("load: %s: error loading executable\n", file_name);
+		printf ("load: %s: error loading executable\n", argv[0]);
 		goto done;
 	}
 
@@ -421,7 +438,10 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
+
 	file_close (file);
+	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
+	printf("====여기까지는 옵니다!====\n");
 	return success;
 }
 
