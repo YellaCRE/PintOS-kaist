@@ -39,8 +39,191 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f UNUSED) {
+syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
-	printf ("system call!\n");
+	// hex_dump(f->rsp, f->rsp, USER_STACK - f->rsp, true);
+
+	switch ((&f->R)->rax){
+		case SYS_HALT:
+			halt();
+			break;
+		
+		case SYS_EXIT:
+			exit((&f->R)->rdi);
+			break;
+
+		// case SYS_FORK:
+		// 	// printf("SYS_FORK\n");
+
+		// case SYS_EXEC:
+		// 	// printf("SYS_EXEC\n");
+
+		// case SYS_WAIT:
+		// 	// printf("SYS_WAIT\n");
+
+		// case SYS_CREATE:
+		// 	// printf("SYS_CREATE\n");
+
+		// case SYS_REMOVE:
+		// 	// printf("SYS_REMOVE\n");
+
+		// case SYS_OPEN:
+		// 	// printf("SYS_OPEN\n");
+
+		// case SYS_FILESIZE:
+		// 	// printf("SYS_FILESIZE\n");
+
+		// case SYS_READ:
+		// 	// printf("SYS_READ\n");
+
+		// case SYS_WRITE:
+		// 	// printf("SYS_WRITE\n");
+
+		// case SYS_SEEK:
+		// 	// printf("SYS_SEEK\n");
+
+		// case SYS_TELL:
+		// 	// printf("SYS_TELL\n");
+
+		// case SYS_CLOSE:
+		// 	// printf("SYS_CLOSE\n");
+	}
+}
+
+/* ========== kernel-level function ==========*/
+
+void
+halt (void) {
+	printf("(halt) begin\n");
+	power_off();
+}
+
+void
+exit (int status) {
+	struct thread *curr = thread_current ();
+	
+	if (!strcmp(curr->name, "exit")){
+		printf("(exit) begin\n");
+	}
+
+	curr->exit_code = status;
+	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
 	thread_exit ();
 }
+
+/*
+pid_t
+fork (const char *thread_name){
+	return (pid_t) syscall1 (SYS_FORK, thread_name);
+}
+
+int
+exec (const char *file) {
+	return (pid_t) syscall1 (SYS_EXEC, file);
+}
+
+int
+wait (pid_t pid) {
+	return syscall1 (SYS_WAIT, pid);
+}
+
+bool
+create (const char *file, unsigned initial_size) {
+	return syscall2 (SYS_CREATE, file, initial_size);
+}
+
+bool
+remove (const char *file) {
+	return syscall1 (SYS_REMOVE, file);
+}
+
+int
+open (const char *file) {
+	return syscall1 (SYS_OPEN, file);
+}
+
+int
+filesize (int fd) {
+	return syscall1 (SYS_FILESIZE, fd);
+}
+
+int
+read (int fd, void *buffer, unsigned size) {
+	return syscall3 (SYS_READ, fd, buffer, size);
+}
+
+int
+write (int fd, const void *buffer, unsigned size) {
+	return syscall3 (SYS_WRITE, fd, buffer, size);
+}
+
+void
+seek (int fd, unsigned position) {
+	syscall2 (SYS_SEEK, fd, position);
+}
+
+unsigned
+tell (int fd) {
+	return syscall1 (SYS_TELL, fd);
+}
+
+void
+close (int fd) {
+	syscall1 (SYS_CLOSE, fd);
+}
+
+int
+dup2 (int oldfd, int newfd){
+	return syscall2 (SYS_DUP2, oldfd, newfd);
+}
+
+void *
+mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
+	return (void *) syscall5 (SYS_MMAP, addr, length, writable, fd, offset);
+}
+
+void
+munmap (void *addr) {
+	syscall1 (SYS_MUNMAP, addr);
+}
+
+bool
+chdir (const char *dir) {
+	return syscall1 (SYS_CHDIR, dir);
+}
+
+bool
+mkdir (const char *dir) {
+	return syscall1 (SYS_MKDIR, dir);
+}
+
+bool
+readdir (int fd, char name[READDIR_MAX_LEN + 1]) {
+	return syscall2 (SYS_READDIR, fd, name);
+}
+
+bool
+isdir (int fd) {
+	return syscall1 (SYS_ISDIR, fd);
+}
+
+int
+inumber (int fd) {
+	return syscall1 (SYS_INUMBER, fd);
+}
+
+int
+symlink (const char* target, const char* linkpath) {
+	return syscall2 (SYS_SYMLINK, target, linkpath);
+}
+
+int
+mount (const char *path, int chan_no, int dev_no) {
+	return syscall3 (SYS_MOUNT, path, chan_no, dev_no);
+}
+
+int
+umount (const char *path) {
+	return syscall1 (SYS_UMOUNT, path);
+}
+*/
