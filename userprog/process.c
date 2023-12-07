@@ -186,7 +186,7 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
-	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -593,8 +593,8 @@ load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
 	// printf("word_align: %p\n", if_->rsp);
 
 	// null pointer
-	if_->rsp -= sizeof(arg_value);
-	memcpy(if_->rsp, &arg_value[arg_count], sizeof(&arg_value[arg_count]));
+	if_->rsp -= sizeof(char **);
+	memset(if_->rsp, 0, sizeof(char **));
 	// printf("argv[%d]: %p, null pointer\n", arg_count, if_->rsp);
 
 	// argv userstack에 쌓기
@@ -610,9 +610,8 @@ load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
 	(&if_->R)->rsi = if_->rsp;
 
 	// fake "return address"
-	void *return_address;
-	if_->rsp -= sizeof(return_address);
-	memcpy(if_->rsp, return_address, sizeof(return_address));
+	if_->rsp -= sizeof(void *);
+	memset(if_->rsp, 0, sizeof(void *));
 	// printf("fake return address: %p\n", if_->rsp);
 }
 
