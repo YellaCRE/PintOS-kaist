@@ -186,8 +186,8 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
-	hex_dump(_if.rsp, _if.rsp, KERN_BASE - _if.rsp, true);
-	printf("====여기까지는 옵니다!====\n");
+	hex_dump(_if.rsp, _if.rsp, USER_STACK - _if.rsp, true);
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
@@ -334,11 +334,13 @@ load (const char *file_name, struct intr_frame *if_) {
 	bool success = false;
 	int i;
 	
-	char *argv[128];
+	// parse file_name
+	char *file_name_copy = (char*)file_name;
+	char *argv[64];
 	char *ptr, *next_ptr;
 	int argc = 0;
  
-	ptr = strtok_r(file_name, DELIM_CHARS, &next_ptr);
+	ptr = strtok_r(file_name_copy, DELIM_CHARS, &next_ptr);
 	argv[argc] = ptr;
 	while (ptr) {
 		ptr = strtok_r(NULL, DELIM_CHARS, &next_ptr);
@@ -434,14 +436,13 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
+	load_stack(if_, argv, argc);
 	success = true;
 
 done:
 	/* We arrive here whether the load is successful or not. */
 
 	file_close (file);
-	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
-	printf("====여기까지는 옵니다!====\n");
 	return success;
 }
 
@@ -569,6 +570,50 @@ setup_stack (struct intr_frame *if_) {
 			palloc_free_page (kpage);
 	}
 	return success;
+}
+
+void
+load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
+	char *arg_value_addr[64];
+
+	// printf("USER_STACK: %p\n", if_->rsp);
+
+	// argv[i] 쌓기
+	for (int i=arg_count-1; i>=0; i--){
+		if_->rsp -= strlen(arg_value[i])+1;
+		memcpy(if_->rsp, arg_value[i], strlen(arg_value[i])+1);
+		// printf("argv[%d][]: %p, %s\n", i, if_->rsp, arg_value[i]);
+		arg_value_addr[i] = if_->rsp;
+	}
+	
+	// word_align
+	uint8_t word_align[(USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
+	if_->rsp -= sizeof(word_align);
+	memcpy(if_->rsp, word_align, sizeof(word_align));
+	// printf("word_align: %p\n", if_->rsp);
+
+	// null pointer
+	if_->rsp -= sizeof(arg_value);
+	memcpy(if_->rsp, &arg_value[arg_count], sizeof(&arg_value[arg_count]));
+	// printf("argv[%d]: %p, null pointer\n", arg_count, if_->rsp);
+
+	// argv userstack에 쌓기
+	// memcpy(if_->rsp, arg_value, sizeof(arg_value));
+	for (int i=arg_count-1; i>=0; i--){
+		if_->rsp -= sizeof(char **);
+		memcpy(if_->rsp, &arg_value_addr[i], sizeof(char **));
+		// printf("argv[%d]: %p\n",i ,if_->rsp);
+	}
+
+	// RDI: argc | RSI: &argv[0]
+	(&if_->R)->rdi = arg_count;
+	(&if_->R)->rsi = if_->rsp;
+
+	// fake "return address"
+	void *return_address;
+	if_->rsp -= sizeof(return_address);
+	memcpy(if_->rsp, return_address, sizeof(return_address));
+	// printf("fake return address: %p\n", if_->rsp);
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
