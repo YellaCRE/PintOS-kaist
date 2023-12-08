@@ -218,11 +218,11 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
-
+#ifdef USERPROG
 	// intialize fd_table
 	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
 	t->next_fd = 3;
-
+#endif
 	/* Add to run queue. */
 	thread_unblock (t);
 
