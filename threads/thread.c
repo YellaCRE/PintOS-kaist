@@ -606,6 +606,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->recent_cpu = INITIAL_RECENT_CPU;			// intialize recent cpu
 	
 	list_push_back(&all_list, &t->all_elem);	// recent_cpu를 위한 all_list
+
+	// intialize fd_table
+	// t->fd_table[0] = stdin;
+	// t->fd_table[1] = stdout;
+	// t->fd_table[2] = stderr;
+	for(int i=3; i<64; i++){
+		t->fd_table[i] = NULL;
+	}
+	t->next_fd = 3;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

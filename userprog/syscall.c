@@ -11,6 +11,25 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+void halt (void);
+void exit (int status);
+bool create (const char *file, unsigned initial_size);
+int open (const char *file);
+bool remove (const char *file);
+
+/*
+pid_t fork (const char *thread_name);
+int exec (const char *file);
+int wait (pid_t pid);
+
+int filesize (int fd);
+int read (int fd, void *buffer, unsigned size);
+int write (int fd, const void *buffer, unsigned size);
+void seek (int fd, unsigned position);
+unsigned tell (int fd);
+void close (int fd);
+*/
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -61,8 +80,9 @@ syscall_handler (struct intr_frame *f) {
 		// case SYS_WAIT:
 		// 	// printf("SYS_WAIT\n");
 
-		// case SYS_CREATE:
-		// 	// printf("SYS_CREATE\n");
+		case SYS_CREATE:
+			create((&f->R)->rdi, (&f->R)->rsi);
+			break;
 
 		// case SYS_REMOVE:
 		// 	// printf("SYS_REMOVE\n");
@@ -94,21 +114,56 @@ syscall_handler (struct intr_frame *f) {
 
 void
 halt (void) {
-	printf("(halt) begin\n");
 	power_off();
 }
 
 void
 exit (int status) {
 	struct thread *curr = thread_current ();
-	
-	if (!strcmp(curr->name, "exit")){
-		printf("(exit) begin\n");
-	}
-
 	curr->exit_code = status;
 	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
 	thread_exit ();
+}
+
+bool
+create (const char *file, unsigned initial_size) {
+	return filesys_create(file, initial_size);
+}
+
+int
+open (const char *file) {
+	struct thread *curr;
+	struct file *target;
+	int fd;
+
+	curr = thread_current ();
+
+	target = filesys_open(file);
+	if (target == NULL)
+		return -1;
+
+	fd = curr->next_fd;
+	// if (fd == 63)
+	// 	return -1;
+	curr->fd_table[fd] = target;
+	for (int i=3; i<64; i++){
+		if (curr->fd_table[i] == NULL)
+			curr->next_fd = i;
+			break;
+	}
+	return fd;
+}
+
+void
+close (int fd) {
+	struct thread *curr = thread_current ();
+	file_close(curr->fd_table[fd]);
+	curr->fd_table[fd] = NULL;
+}
+
+bool
+remove (const char *file) {
+	return filesys_remove(file);
 }
 
 /*
@@ -125,21 +180,6 @@ exec (const char *file) {
 int
 wait (pid_t pid) {
 	return syscall1 (SYS_WAIT, pid);
-}
-
-bool
-create (const char *file, unsigned initial_size) {
-	return syscall2 (SYS_CREATE, file, initial_size);
-}
-
-bool
-remove (const char *file) {
-	return syscall1 (SYS_REMOVE, file);
-}
-
-int
-open (const char *file) {
-	return syscall1 (SYS_OPEN, file);
 }
 
 int
@@ -165,11 +205,6 @@ seek (int fd, unsigned position) {
 unsigned
 tell (int fd) {
 	return syscall1 (SYS_TELL, fd);
-}
-
-void
-close (int fd) {
-	syscall1 (SYS_CLOSE, fd);
 }
 
 int

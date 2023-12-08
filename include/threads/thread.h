@@ -120,6 +120,8 @@ struct thread {
 
 	// syscall
 	int exit_code;
+	struct file *fd_table[64];
+	int next_fd;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

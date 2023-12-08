@@ -191,6 +191,10 @@ process_exec (void *f_name) {
 	if (!success)
 		return -1;
 
+	// user memory access
+	if (!is_user_vaddr(_if.rsp))
+		return -1;
+
 	/* Start switched process. */
 	do_iret (&_if);
 	NOT_REACHED ();
