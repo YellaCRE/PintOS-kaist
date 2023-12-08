@@ -8,8 +8,13 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+#define STDIN_FILENO 0
+#define STDOUT_FILENO 1
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+
+void check_valid(void *ptr);
 
 void halt (void);
 void exit (int status);
@@ -81,27 +86,27 @@ syscall_handler (struct intr_frame *f) {
 		// 	// printf("SYS_WAIT\n");
 
 		case SYS_CREATE:
-			create((&f->R)->rdi, (&f->R)->rsi);
+			(&f->R)->rax = create((&f->R)->rdi, (&f->R)->rsi);
 			break;
 
 		case SYS_REMOVE:
-			remove((&f->R)->rdi);
+			(&f->R)->rax = remove((&f->R)->rdi);
 			break;
 
 		case SYS_OPEN:
-			open((&f->R)->rdi);
+			(&f->R)->rax = open((&f->R)->rdi);
 			break;
 
 		case SYS_FILESIZE:
-			filesize((&f->R)->rdi);
+			(&f->R)->rax = filesize((&f->R)->rdi);
 			break;
 		
 		case SYS_READ:
-			read((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			(&f->R)->rax = read((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
 			break;
 
 		case SYS_WRITE:
-			write((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			(&f->R)->rax = write((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
 			break;
 
 		case SYS_SEEK:
@@ -109,7 +114,7 @@ syscall_handler (struct intr_frame *f) {
 			break;
 
 		case SYS_TELL:
-			tell((&f->R)->rdi);
+			(&f->R)->rax = tell((&f->R)->rdi);
 			break;
 
 		case SYS_CLOSE:
@@ -119,6 +124,12 @@ syscall_handler (struct intr_frame *f) {
 }
 
 /* ========== kernel-level function ==========*/
+
+void
+check_valid(void *ptr){
+	if (!ptr || is_kernel_vaddr(ptr) || !(pml4_get_page(thread_current()->pml4, ptr)))
+		exit(-1);
+}
 
 void
 halt (void) {
@@ -135,43 +146,45 @@ exit (int status) {
 
 bool
 create (const char *file, unsigned initial_size) {
+	check_valid(file);
 	return filesys_create(file, initial_size);
 }
 
 bool
 remove (const char *file) {
+	check_valid(file);
 	return filesys_remove(file);
 }
 
 int
 open (const char *file) {
-	struct thread *curr;
+	check_valid(file);
 	struct file *target;
+	struct thread *curr;
 	int fd;
 
-	curr = thread_current ();
-
 	target = filesys_open(file);
-	if (target == NULL)
+	if (!target)
 		return -1;
-
+	
+	curr = thread_current ();
 	fd = curr->next_fd;
-
 	curr->fd_table[fd] = target;
+	
 	for (int i=3; i<64; i++){
 		if (curr->fd_table[i] == NULL)
 			curr->next_fd = i;
-			break;
+			return fd;
 	}
-	// TODO: fd_table이 꽉 차면 page_fault
-
-	return fd;
+	
+	// 만약 fd_table에 빈 공간이 없다면 열지 않는다.
+	file_close(target);
+	return -1;
 }
 
 int
 filesize (int fd) {
-	struct thread *curr = thread_current ();
-	return file_length(curr->fd_table[fd]);
+	return file_length(thread_current()->fd_table[fd]);
 }
 
 int
@@ -180,7 +193,7 @@ read (int fd, void *buffer, unsigned size) {
 	unsigned read_len;
 	uint8_t key;
 	
-	if (fd == 0){
+	if (fd == STDIN_FILENO){
 		key = input_getc();
 		read_len = file_read(key, buffer, size);
 	}
@@ -199,7 +212,7 @@ write (int fd, const void *buffer, unsigned size) {
 	struct thread *curr;
 	unsigned write_len;
 
-	if (fd == 1){
+	if (fd == STDOUT_FILENO){
 		putbuf(buffer, size);
 		write_len = size;
 	}
@@ -215,21 +228,20 @@ write (int fd, const void *buffer, unsigned size) {
 
 void
 seek (int fd, unsigned position) {
-	struct thread *curr = thread_current ();
-	file_seek(curr->fd_table[fd], position);
+	file_seek(thread_current()->fd_table[fd], position);
 }
 
 unsigned
 tell (int fd) {
-	struct thread *curr = thread_current ();
-	return file_tell(curr->fd_table[fd]);
+	return file_tell(thread_current()->fd_table[fd]);
 }
 
 void
 close (int fd) {
 	struct thread *curr = thread_current ();
-	file_close(curr->fd_table[fd]);
+	struct file *f = curr->fd_table[fd];
 	curr->fd_table[fd] = NULL;
+	file_close(f);
 }
 
 /*
