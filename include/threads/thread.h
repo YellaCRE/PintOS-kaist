@@ -120,7 +120,7 @@ struct thread {
 
 	// syscall
 	int exit_code;
-	struct file *fd_table[64];
+	struct file **fd_table;
 	int next_fd;
 
 #ifdef USERPROG

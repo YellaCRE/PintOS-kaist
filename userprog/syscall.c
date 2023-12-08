@@ -166,7 +166,7 @@ open (const char *file) {
 	target = filesys_open(file);
 	if (!target)
 		return -1;
-	
+
 	curr = thread_current ();
 	fd = curr->next_fd;
 	curr->fd_table[fd] = target;
@@ -176,7 +176,7 @@ open (const char *file) {
 			curr->next_fd = i;
 			return fd;
 	}
-	
+
 	// 만약 fd_table에 빈 공간이 없다면 열지 않는다.
 	file_close(target);
 	return -1;
@@ -239,9 +239,8 @@ tell (int fd) {
 void
 close (int fd) {
 	struct thread *curr = thread_current ();
-	struct file *f = curr->fd_table[fd];
 	curr->fd_table[fd] = NULL;
-	file_close(f);
+	// file_close(curr->fd_table[fd]);	// 이거 안된다
 }
 
 /*

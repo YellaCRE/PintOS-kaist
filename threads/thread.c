@@ -219,6 +219,10 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	// intialize fd_table
+	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
+	t->next_fd = 3;
+
 	/* Add to run queue. */
 	thread_unblock (t);
 
@@ -607,14 +611,6 @@ init_thread (struct thread *t, const char *name, int priority) {
 	
 	list_push_back(&all_list, &t->all_elem);	// recent_cpu를 위한 all_list
 
-	// intialize fd_table
-	// t->fd_table[0] = stdin;
-	// t->fd_table[1] = stdout;
-	// t->fd_table[2] = stderr;
-	for(int i=3; i<64; i++){
-		t->fd_table[i] = NULL;
-	}
-	t->next_fd = 3;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
