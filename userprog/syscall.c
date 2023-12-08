@@ -13,21 +13,21 @@ void syscall_handler (struct intr_frame *);
 
 void halt (void);
 void exit (int status);
+
 bool create (const char *file, unsigned initial_size);
-int open (const char *file);
 bool remove (const char *file);
-
-/*
-pid_t fork (const char *thread_name);
-int exec (const char *file);
-int wait (pid_t pid);
-
+int open (const char *file);
 int filesize (int fd);
 int read (int fd, void *buffer, unsigned size);
 int write (int fd, const void *buffer, unsigned size);
 void seek (int fd, unsigned position);
 unsigned tell (int fd);
 void close (int fd);
+
+/*
+pid_t fork (const char *thread_name);
+int exec (const char *file);
+int wait (pid_t pid);
 */
 
 /* System call.
@@ -84,29 +84,37 @@ syscall_handler (struct intr_frame *f) {
 			create((&f->R)->rdi, (&f->R)->rsi);
 			break;
 
-		// case SYS_REMOVE:
-		// 	// printf("SYS_REMOVE\n");
+		case SYS_REMOVE:
+			remove((&f->R)->rdi);
+			break;
 
-		// case SYS_OPEN:
-		// 	// printf("SYS_OPEN\n");
+		case SYS_OPEN:
+			open((&f->R)->rdi);
+			break;
 
-		// case SYS_FILESIZE:
-		// 	// printf("SYS_FILESIZE\n");
+		case SYS_FILESIZE:
+			filesize((&f->R)->rdi);
+			break;
+		
+		case SYS_READ:
+			read((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			break;
 
-		// case SYS_READ:
-		// 	// printf("SYS_READ\n");
+		case SYS_WRITE:
+			write((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			break;
 
-		// case SYS_WRITE:
-		// 	// printf("SYS_WRITE\n");
+		case SYS_SEEK:
+			seek((&f->R)->rdi, (&f->R)->rsi);
+			break;
 
-		// case SYS_SEEK:
-		// 	// printf("SYS_SEEK\n");
+		case SYS_TELL:
+			tell((&f->R)->rdi);
+			break;
 
-		// case SYS_TELL:
-		// 	// printf("SYS_TELL\n");
-
-		// case SYS_CLOSE:
-		// 	// printf("SYS_CLOSE\n");
+		case SYS_CLOSE:
+			close((&f->R)->rdi);
+			break;
 	}
 }
 
@@ -130,6 +138,11 @@ create (const char *file, unsigned initial_size) {
 	return filesys_create(file, initial_size);
 }
 
+bool
+remove (const char *file) {
+	return filesys_remove(file);
+}
+
 int
 open (const char *file) {
 	struct thread *curr;
@@ -143,15 +156,73 @@ open (const char *file) {
 		return -1;
 
 	fd = curr->next_fd;
-	// if (fd == 63)
-	// 	return -1;
+
 	curr->fd_table[fd] = target;
 	for (int i=3; i<64; i++){
 		if (curr->fd_table[i] == NULL)
 			curr->next_fd = i;
 			break;
 	}
+	// TODO: fd_table이 꽉 차면 page_fault
+
 	return fd;
+}
+
+int
+filesize (int fd) {
+	struct thread *curr = thread_current ();
+	return file_length(curr->fd_table[fd]);
+}
+
+int
+read (int fd, void *buffer, unsigned size) {
+	struct thread *curr;
+	unsigned read_len;
+	uint8_t key;
+	
+	if (fd == 0){
+		key = input_getc();
+		read_len = file_read(key, buffer, size);
+	}
+	else{
+		curr = thread_current ();
+		read_len = file_read(curr->fd_table[fd], buffer, size);
+	}
+
+	if (read_len != size)
+		return -1;
+	return read_len;
+}
+
+int
+write (int fd, const void *buffer, unsigned size) {
+	struct thread *curr;
+	unsigned write_len;
+
+	if (fd == 1){
+		putbuf(buffer, size);
+		write_len = size;
+	}
+	else{
+		curr = thread_current ();
+		write_len = file_read(curr->fd_table[fd], buffer, size);
+	}
+
+	if (write_len != size)
+		return -1;
+	return write_len;
+}
+
+void
+seek (int fd, unsigned position) {
+	struct thread *curr = thread_current ();
+	file_seek(curr->fd_table[fd], position);
+}
+
+unsigned
+tell (int fd) {
+	struct thread *curr = thread_current ();
+	return file_tell(curr->fd_table[fd]);
 }
 
 void
@@ -159,11 +230,6 @@ close (int fd) {
 	struct thread *curr = thread_current ();
 	file_close(curr->fd_table[fd]);
 	curr->fd_table[fd] = NULL;
-}
-
-bool
-remove (const char *file) {
-	return filesys_remove(file);
 }
 
 /*
@@ -180,31 +246,6 @@ exec (const char *file) {
 int
 wait (pid_t pid) {
 	return syscall1 (SYS_WAIT, pid);
-}
-
-int
-filesize (int fd) {
-	return syscall1 (SYS_FILESIZE, fd);
-}
-
-int
-read (int fd, void *buffer, unsigned size) {
-	return syscall3 (SYS_READ, fd, buffer, size);
-}
-
-int
-write (int fd, const void *buffer, unsigned size) {
-	return syscall3 (SYS_WRITE, fd, buffer, size);
-}
-
-void
-seek (int fd, unsigned position) {
-	syscall2 (SYS_SEEK, fd, position);
-}
-
-unsigned
-tell (int fd) {
-	return syscall1 (SYS_TELL, fd);
 }
 
 int
