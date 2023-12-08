@@ -55,7 +55,7 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	// 파일 이름 제대로 만들기
-	ptr = strtok_r(fn_copy, DELIM_CHARS, &next_ptr);
+	ptr = strtok_r(file_name, DELIM_CHARS, &next_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (ptr, PRI_DEFAULT, initd, fn_copy);
@@ -342,16 +342,16 @@ load (const char *file_name, struct intr_frame *if_) {
 	int i;
 	
 	// parse file_name
-	char *file_name_copy = (char*)file_name;
+	char *fn_copy = (char*)file_name;
 	char *argv[64];
 	char *ptr, *next_ptr;
 	int argc = 0;
  
-	ptr = strtok_r(file_name_copy, DELIM_CHARS, &next_ptr);
+	ptr = strtok_r(fn_copy, DELIM_CHARS, &next_ptr);
 	argv[argc] = ptr;
 	while (ptr) {
 		ptr = strtok_r(NULL, DELIM_CHARS, &next_ptr);
-		argc++;
+		argc += 1;
 		argv[argc] = ptr;
 	}
 
@@ -594,7 +594,7 @@ load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
 	}
 	
 	// word_align
-	uint8_t word_align[(USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
+	uint8_t word_align[8 - (USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
 	if_->rsp -= sizeof(word_align);
 	memcpy(if_->rsp, word_align, sizeof(word_align));
 	// printf("word_align: %p\n", if_->rsp);
