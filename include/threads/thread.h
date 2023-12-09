@@ -124,8 +124,12 @@ struct thread {
 
 	// syscall
 	int exit_code;
+	tid_t parent_pid;
+	struct list_elem child_elem;
+	struct list children;
+
+	// file descriptor table
 	struct file **fd_table;
-	int next_fd;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

@@ -19,7 +19,9 @@ void check_valid(void *ptr);
 void halt (void);
 void exit (int status);
 
+pid_t fork (const char *thread_name);
 int exec (const char *cmd_line);
+int wait (pid_t pid);
 
 bool create (const char *file, unsigned initial_size);
 bool remove (const char *file);
@@ -69,60 +71,61 @@ syscall_handler (struct intr_frame *f) {
 	// TODO: Your implementation goes here.
 	// hex_dump(f->rsp, f->rsp, USER_STACK - f->rsp, true);
 
-	switch ((&f->R)->rax){
+	switch (f->R.rax){
 		case SYS_HALT:
 			halt();
 			break;
 		
 		case SYS_EXIT:
-			exit((&f->R)->rdi);
+			exit(f->R.rdi);
 			break;
 
 		case SYS_FORK:
-			// (&f->R)->rax = fork((&f->R)->rdi);
+			f->R.rax = fork(f->R.rdi);
 			break;
 
 		case SYS_EXEC:
-			(&f->R)->rax = exec((&f->R)->rdi);
+			f->R.rax = exec(f->R.rdi);
 			break;
 
-		// case SYS_WAIT:
-		// 	// printf("SYS_WAIT\n");
+		case SYS_WAIT:
+			f->R.rax = wait(f->R.rdi);
+			break;
 
 		case SYS_CREATE:
-			(&f->R)->rax = create((&f->R)->rdi, (&f->R)->rsi);
+			f->R.rax = create(f->R.rdi, f->R.rsi);
 			break;
 
 		case SYS_REMOVE:
-			(&f->R)->rax = remove((&f->R)->rdi);
+			f->R.rax = remove(f->R.rdi);
 			break;
 
 		case SYS_OPEN:
-			(&f->R)->rax = open((&f->R)->rdi);
+			f->R.rax = open(f->R.rdi);
 			break;
 
 		case SYS_FILESIZE:
-			(&f->R)->rax = filesize((&f->R)->rdi);
+			f->R.rax = filesize(f->R.rdi);
 			break;
 		
 		case SYS_READ:
-			(&f->R)->rax = read((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			f->R.rax = read(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 
 		case SYS_WRITE:
-			(&f->R)->rax = write((&f->R)->rdi, (&f->R)->rsi, (&f->R)->rdx);
+			f->R.rax = write(f->R.rdi, f->R.rsi, f->R.rdx);
 			break;
 
 		case SYS_SEEK:
-			seek((&f->R)->rdi, (&f->R)->rsi);
+			seek(f->R.rdi, f->R.rsi);
 			break;
 
 		case SYS_TELL:
-			(&f->R)->rax = tell((&f->R)->rdi);
+			f->R.rax = tell(f->R.rdi);
 			break;
 
 		case SYS_CLOSE:
-			close((&f->R)->rdi);
+			close(f->R.rdi);
 			break;
 	}
 }
@@ -148,9 +151,23 @@ exit (int status) {
 	thread_exit ();
 }
 
+pid_t
+fork (const char *thread_name){
+	int child_pid = process_fork(thread_name);
+	return child_pid;
+}
+
 int
 exec (const char *cmd_line) {
-	return -1;
+	if (process_exec(cmd_line) == -1)
+		return -1;
+	NOT_REACHED();
+}
+
+int
+wait (pid_t pid) {
+	if (process_wait(pid) == -1)
+		return -1;
 }
 
 bool
@@ -168,22 +185,16 @@ remove (const char *file) {
 int
 open (const char *file) {
 	check_valid(file);
-	struct file *target;
-	struct thread *curr;
-	int fd;
-
-	target = filesys_open(file);
+	struct file *target = filesys_open(file);
+	printf("open address: %p\n", target);
 	if (!target)
 		return -1;
 
-	curr = thread_current ();
-	fd = curr->next_fd;
-	curr->fd_table[fd] = target;
-	
+	struct thread *curr = thread_current ();
 	for (int i=3; i<64; i++){
 		if (curr->fd_table[i] == NULL)
-			curr->next_fd = i;
-			return fd;
+			curr->fd_table[i] = target;
+			return i;
 	}
 
 	// 만약 fd_table에 빈 공간이 없다면 열지 않는다.
@@ -256,7 +267,7 @@ close (int fd) {
 
 	struct thread *curr = thread_current ();
 	struct file *target = curr->fd_table[fd];
-
+	printf("close address: %p\n", target);
 	if (!target)
 		return;
 	
@@ -265,15 +276,6 @@ close (int fd) {
 }
 
 /*
-pid_t
-fork (const char *thread_name){
-}
-
-int
-wait (pid_t pid) {
-	return syscall1 (SYS_WAIT, pid);
-}
-
 int
 dup2 (int oldfd, int newfd){
 	return syscall2 (SYS_DUP2, oldfd, newfd);

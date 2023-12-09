@@ -218,7 +218,12 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
 #ifdef USERPROG
+	// intialize child list
+	t->parent_pid = NULL;
+	list_init(&t->children);
+
 	// intialize fd_table
 	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
 	if (t->fd_table == NULL){
@@ -226,9 +231,8 @@ thread_create (const char *name, int priority,
 		return TID_ERROR;
 	}
 	for (int i = 3; i < 64; i++){
-		t->fd_table[i] = NULL; 		/* Initializes all pointers to NULL. */
+		t->fd_table[i] = NULL; 		// initialize fd_table
 	}
-	t->next_fd = 3;
 #endif
 	/* Add to run queue. */
 	thread_unblock (t);
