@@ -221,6 +221,13 @@ thread_create (const char *name, int priority,
 #ifdef USERPROG
 	// intialize fd_table
 	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
+	if (t->fd_table == NULL){
+		palloc_free_page(t);
+		return TID_ERROR;
+	}
+	for (int i = 3; i < 64; i++){
+		t->fd_table[i] = NULL; 		/* Initializes all pointers to NULL. */
+	}
 	t->next_fd = 3;
 #endif
 	/* Add to run queue. */

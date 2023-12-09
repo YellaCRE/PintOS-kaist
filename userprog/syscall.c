@@ -19,6 +19,8 @@ void check_valid(void *ptr);
 void halt (void);
 void exit (int status);
 
+int exec (const char *cmd_line);
+
 bool create (const char *file, unsigned initial_size);
 bool remove (const char *file);
 int open (const char *file);
@@ -76,11 +78,13 @@ syscall_handler (struct intr_frame *f) {
 			exit((&f->R)->rdi);
 			break;
 
-		// case SYS_FORK:
-		// 	// printf("SYS_FORK\n");
+		case SYS_FORK:
+			// (&f->R)->rax = fork((&f->R)->rdi);
+			break;
 
-		// case SYS_EXEC:
-		// 	// printf("SYS_EXEC\n");
+		case SYS_EXEC:
+			(&f->R)->rax = exec((&f->R)->rdi);
+			break;
 
 		// case SYS_WAIT:
 		// 	// printf("SYS_WAIT\n");
@@ -144,6 +148,11 @@ exit (int status) {
 	thread_exit ();
 }
 
+int
+exec (const char *cmd_line) {
+	return -1;
+}
+
 bool
 create (const char *file, unsigned initial_size) {
 	check_valid(file);
@@ -184,7 +193,11 @@ open (const char *file) {
 
 int
 filesize (int fd) {
-	return file_length(thread_current()->fd_table[fd]);
+	struct thread *curr = thread_current();
+	struct file *target = curr->fd_table[fd];
+	if (!target)
+		return -1;
+	return file_length(target);
 }
 
 int
@@ -238,20 +251,22 @@ tell (int fd) {
 
 void
 close (int fd) {
+	if (fd<2 | fd>63)
+		return;
+
 	struct thread *curr = thread_current ();
+	struct file *target = curr->fd_table[fd];
+
+	if (!target)
+		return;
+	
 	curr->fd_table[fd] = NULL;
-	// file_close(curr->fd_table[fd]);	// 이거 안된다
+	file_close(target);	// 이거 안된다
 }
 
 /*
 pid_t
 fork (const char *thread_name){
-	return (pid_t) syscall1 (SYS_FORK, thread_name);
-}
-
-int
-exec (const char *file) {
-	return (pid_t) syscall1 (SYS_EXEC, file);
 }
 
 int
