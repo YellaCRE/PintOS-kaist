@@ -22,7 +22,6 @@ file_open (struct inode *inode) {
 		file->pos = 0;
 		file->deny_write = false;
 		file->ref_cnt = 1;
-		printf("file_open address: %p\n", file);
 		return file;
 	} else {
 		inode_close (inode);
@@ -54,7 +53,6 @@ file_duplicate (struct file *file) {
 /* Closes FILE. */
 void
 file_close (struct file *file) {
-	printf("file_close address: %p\n", file);
 	if (file != NULL) {
 		file_allow_write (file);
 		inode_close (file->inode);

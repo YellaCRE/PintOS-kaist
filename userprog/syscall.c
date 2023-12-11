@@ -7,12 +7,13 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "filesys/filesys.h"
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
 void syscall_entry (void);
-void syscall_handler (struct intr_frame *);
+void syscall_handler (struct intr_frame * UNUSED);
 
 void check_valid(void *ptr);
 
@@ -67,7 +68,7 @@ syscall_init (void) {
 
 /* The main system call interface */
 void
-syscall_handler (struct intr_frame *f) {
+syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	// hex_dump(f->rsp, f->rsp, USER_STACK - f->rsp, true);
 
@@ -186,7 +187,6 @@ int
 open (const char *file) {
 	check_valid(file);
 	struct file *target = filesys_open(file);
-	printf("open address: %p\n", target);
 	if (!target)
 		return -1;
 
@@ -267,7 +267,6 @@ close (int fd) {
 
 	struct thread *curr = thread_current ();
 	struct file *target = curr->fd_table[fd];
-	printf("close address: %p\n", target);
 	if (!target)
 		return;
 	
