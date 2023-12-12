@@ -12,6 +12,7 @@
 #include "filesys/file.h"
 #include "userprog/process.h"
 #include "threads/init.h"
+#include "threads/palloc.h"
 #include "devices/input.h"
 
 #define STDIN_FILENO 0
@@ -165,7 +166,17 @@ _fork (const char *thread_name, struct intr_frame *f UNUSED){
 
 int
 _exec (const char *cmd_line) {
-	return process_exec((void *)cmd_line);
+	check_file_valid((void *)cmd_line);
+	char *fn_copy;
+
+	fn_copy = palloc_get_page (0);
+	if (fn_copy == NULL)
+		return -1;
+	
+	strlcpy (fn_copy, cmd_line, PGSIZE);
+
+	if ((process_exec(fn_copy)) == -1)
+		_exit(-1);
 }
 
 int
@@ -294,60 +305,3 @@ _close (int fd) {
 	curr->fd_table[fd] = NULL;
 	file_close(target);
 }
-
-/*
-int
-dup2 (int oldfd, int newfd){
-	return syscall2 (SYS_DUP2, oldfd, newfd);
-}
-
-void *
-mmap (void *addr, size_t length, int writable, int fd, off_t offset) {
-	return (void *) syscall5 (SYS_MMAP, addr, length, writable, fd, offset);
-}
-
-void
-munmap (void *addr) {
-	syscall1 (SYS_MUNMAP, addr);
-}
-
-bool
-chdir (const char *dir) {
-	return syscall1 (SYS_CHDIR, dir);
-}
-
-bool
-mkdir (const char *dir) {
-	return syscall1 (SYS_MKDIR, dir);
-}
-
-bool
-readdir (int fd, char name[READDIR_MAX_LEN + 1]) {
-	return syscall2 (SYS_READDIR, fd, name);
-}
-
-bool
-isdir (int fd) {
-	return syscall1 (SYS_ISDIR, fd);
-}
-
-int
-inumber (int fd) {
-	return syscall1 (SYS_INUMBER, fd);
-}
-
-int
-symlink (const char* target, const char* linkpath) {
-	return syscall2 (SYS_SYMLINK, target, linkpath);
-}
-
-int
-mount (const char *path, int chan_no, int dev_no) {
-	return syscall3 (SYS_MOUNT, path, chan_no, dev_no);
-}
-
-int
-umount (const char *path) {
-	return syscall1 (SYS_UMOUNT, path);
-}
-*/

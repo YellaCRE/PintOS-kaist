@@ -205,9 +205,9 @@ process_exec (void *f_name) {
 
 	/* And then load the binary */
 	success = load (file_name, &_if);
+	palloc_free_page (file_name);		// 여기서 fn_copy를 free 해준다
 
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
 	if (!success)
 		return -1;
 
@@ -236,7 +236,7 @@ process_wait (tid_t child_tid UNUSED) {
 	struct thread *e_thread;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
-	
+
 	// invalid child_tid
 	if (child_tid == TID_ERROR)
 		return -1;
