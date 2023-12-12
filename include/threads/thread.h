@@ -138,6 +138,9 @@ struct thread {
 
 	// file descriptor table
 	struct file **fd_table;	
+
+	// lock
+	struct lock sys_lock;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

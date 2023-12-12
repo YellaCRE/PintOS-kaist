@@ -640,6 +640,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	// initailize fork sema
 	sema_init(&t->fork_sema, 0);
+
+	// initailize sys lock
+	lock_init(&t->sys_lock);
 #endif
 }
 

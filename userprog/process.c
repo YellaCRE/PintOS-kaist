@@ -256,13 +256,16 @@ process_wait (tid_t child_tid UNUSED) {
 			return -1;
 		}
 	}
+	// 기다린 목록에 추가
+	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);
+
 	// 기다린다
 	sema_down(&child_thread->process_sema);
 
 	int exit_code = child_thread->exit_code;
-	list_remove(&child_thread->c_elem);										// 부모의 자식 리스트에서 제거
-	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);		// 제거한 목록에 추가
-	child_thread->parent_thread = NULL;										// 부모 초기화
+	list_remove(&child_thread->c_elem);			// 부모의 자식 리스트에서 제거
+	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
+	child_thread->parent_thread = NULL;			// 부모 초기화
 
 	return exit_code;
 }

@@ -14,6 +14,7 @@
 #include "threads/init.h"
 #include "threads/palloc.h"
 #include "devices/input.h"
+#include <string.h>
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
@@ -156,6 +157,11 @@ _exit (int status) {
 	struct thread *curr = thread_current ();
 	curr->exit_code = status;
 	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
+
+	for (int i=3; i<OPEN_MAX; i++){
+		_close(i);
+	}
+
 	thread_exit ();
 }
 
@@ -177,6 +183,7 @@ _exec (const char *cmd_line) {
 
 	if ((process_exec(fn_copy)) == -1)
 		_exit(-1);
+	NOT_REACHED();
 }
 
 int
@@ -200,13 +207,15 @@ int
 _open (const char *file) {
 	check_file_valid((void *)file);
 	struct file *target;
-	struct thread *curr;
+	struct thread *curr = thread_current ();
 
 	target = filesys_open(file);
 	if (!target)
 		return -1;
 
-	curr = thread_current ();
+	if (!strcmp(thread_name(), file))
+		file_deny_write(target);
+
 	for (int i=3; i<OPEN_MAX; i++){
 		if (curr->fd_table[i] == NULL){
 			curr->fd_table[i] = target;
@@ -214,7 +223,7 @@ _open (const char *file) {
 		}
 	}
 
-	// 만약 fd_table에 빈 공간이 없다면 열지 않는다.
+	// 만약 fd_table에 빈 공간이 없다면 닫는다.
 	file_close(target);
 	return -1;
 }
@@ -231,7 +240,7 @@ _filesize (int fd) {
 int
 _read (int fd, void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
-	struct thread *curr;
+	struct thread *curr = thread_current ();
 	struct file *target;
 	unsigned read_len;
 	
@@ -241,13 +250,11 @@ _read (int fd, void *buffer, unsigned size) {
 	}
 	else{
 		check_fd_valid(fd);
-		curr = thread_current ();
-		if (!(target = curr->fd_table[fd]))
+		if (!(target = curr->fd_table[fd])){
 			return -1;
-		
-		read_len = file_read(curr->fd_table[fd], buffer, size);
+		}
+		read_len = file_read(target, buffer, size);
 	}
-
 
 	if (read_len != size)
 		return -1;
@@ -257,7 +264,7 @@ _read (int fd, void *buffer, unsigned size) {
 int
 _write (int fd, const void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
-	struct thread *curr;
+	struct thread *curr = thread_current ();
 	struct file *target;
 	unsigned write_len;
 
@@ -267,13 +274,12 @@ _write (int fd, const void *buffer, unsigned size) {
 	}
 	else{
 		check_fd_valid(fd);
-		curr = thread_current ();
-		if (!(target = curr->fd_table[fd]))
+		file_deny_write(curr->fd_table[fd]);
+		if (!(target = curr->fd_table[fd])){
 			return -1;
-
+		}
 		write_len = file_read(target, (void *)buffer, size);
 	}
-
 	if (write_len != size)
 		return -1;
 	return write_len;
@@ -301,7 +307,7 @@ _close (int fd) {
 	curr = thread_current ();
 	if (!(target = curr->fd_table[fd]))
 		return;
-	
+
 	curr->fd_table[fd] = NULL;
 	file_close(target);
 }
