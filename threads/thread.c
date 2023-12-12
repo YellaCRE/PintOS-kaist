@@ -633,7 +633,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init(&t->child_list);
 
 	// intialize already wait list
-	list_init(&t->already_wait_list);
+	list_init(&t->killed_list);
 
 	// initailize process sema
 	sema_init(&t->process_sema, 0);

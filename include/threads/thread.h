@@ -131,8 +131,8 @@ struct thread {
 	// wait
 	struct list_elem c_elem;
 	struct list child_list;
-	struct list_elem aw_elem;
-	struct list already_wait_list;
+	struct list_elem k_elem;
+	struct list killed_list;
 	struct semaphore process_sema;
 	struct semaphore fork_sema;
 

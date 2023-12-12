@@ -241,29 +241,28 @@ process_wait (tid_t child_tid UNUSED) {
 	if (child_tid == TID_ERROR)
 		return -1;
 
-	// 부모의 자식이 없으면
+	// 부모의 자식이 있으면
 	if (list_empty(&parent_thread->child_list))
 		return -1;
 
-	// 만약 내 자식이 아니면
+	// 만약 내 자식이면
 	if (!(child_thread = find_child(child_tid)))
 		return -1;
 	
-	// 이미 기다린 자식이면
-	// for (e=list_begin(&parent_thread->already_wait_list); e!=list_end(&parent_thread->already_wait_list); e = list_next(e)){
-	// 	e_thread = list_entry(e, struct thread, aw_elem);
-	// 	if (e_thread->tid == child_tid){
-	// 		return -1;
-	// 	}
-	// }
-	// list_push_back(&parent_thread->already_wait_list, &child_thread->aw_elem);
-
+	// 이미 기다린 자식이 아니면
+	for (e=list_begin(&parent_thread->killed_list); e!=list_end(&parent_thread->killed_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, k_elem);
+		if (e_thread->tid == child_tid){
+			return -1;
+		}
+	}
 	// 기다린다
 	sema_down(&child_thread->process_sema);
 
 	int exit_code = child_thread->exit_code;
-	list_remove(&child_thread->c_elem);				// 부모의 자식 리스트에서 제거
-	child_thread->parent_thread = NULL;				// 부모 초기화
+	list_remove(&child_thread->c_elem);										// 부모의 자식 리스트에서 제거
+	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);		// 제거한 목록에 추가
+	child_thread->parent_thread = NULL;										// 부모 초기화
 
 	return exit_code;
 }
