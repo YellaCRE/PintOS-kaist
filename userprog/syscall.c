@@ -16,6 +16,7 @@
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
+#define OPEN_MAX 64
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame * UNUSED);
@@ -140,7 +141,7 @@ check_file_valid(void *ptr){
 
 void
 check_fd_valid(int fd){
-	if (fd < 2 || fd > 63)
+	if (fd < 2 || fd >= OPEN_MAX)
 		_exit(-1);
 }
 
@@ -203,7 +204,7 @@ _open (const char *file) {
 		return -1;
 
 	curr = thread_current ();
-	for (int i=3; i<64; i++){
+	for (int i=3; i<OPEN_MAX; i++){
 		if (curr->fd_table[i] == NULL){
 			curr->fd_table[i] = target;
 			return i;

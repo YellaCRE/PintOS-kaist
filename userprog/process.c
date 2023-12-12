@@ -23,6 +23,7 @@
 #endif
 // 구분자를 공백으로 설정
 #define DELIM_CHARS	" "
+#define OPEN_MAX 64
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -85,7 +86,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
 	curr->intr_frame_ptr = if_;
-	
+
 	return thread_create (name,
 			PRI_DEFAULT, __do_fork, curr);
 }
@@ -111,12 +112,13 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	/* 4. TODO: Duplicate parent's page to the new page and
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
-	memcpy(newpage, parent_page, sizeof(parent_page));
-	writable = (is_writable(pte)) ? true : false;
+	memcpy(newpage, parent_page, PGSIZE);
+	writable = is_writable(pte);
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		palloc_free_page(newpage);
 	}
 	return true;
 }
@@ -157,15 +159,15 @@ __do_fork (void *aux) {
 	 * TODO:       in include/filesys/file.h. Note that parent should not return
 	 * TODO:       from the fork() until this function successfully duplicates
 	 * TODO:       the resources of parent.*/
-	process_init ();
 
-	for (int i=3; i<64; i++){
+	for (int i=3; i<OPEN_MAX; i++){
 		struct file *tmp = parent->fd_table[i];
-		if (tmp){
+		if (tmp != NULL){
 			current->fd_table[i] = file_duplicate(tmp);
 		}
 	}
-
+	process_init ();
+	if_.R.rax = 0;
 	/* Finally, switch to the newly created process. */
 	if (succ){
 		do_iret (&if_);
@@ -232,11 +234,12 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	palloc_free_page((void *)curr->fd_table);
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	palloc_free_page((void *)curr->fd_table);
+	
 	process_cleanup ();
 }
 
