@@ -175,7 +175,8 @@ __do_fork (void *aux) {
 	process_init ();
 	
 	if_.R.rax = 0;
-	sema_up(&current->fork_sema);
+	sema_up(&current->fork_sema);	// 이제 대기하고 있던 부모를 깨워준다
+
 	/* Finally, switch to the newly created process. */
 	if (succ){
 		do_iret (&if_);
@@ -235,23 +236,28 @@ process_wait (tid_t child_tid UNUSED) {
 	struct thread *e_thread;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
+	
 	// invalid child_tid
 	if (child_tid == TID_ERROR)
 		return -1;
+
 	// 부모의 자식이 없으면
 	if (list_empty(&parent_thread->child_list))
 		return -1;
+
 	// 만약 내 자식이 아니면
 	if (!(child_thread = find_child(child_tid)))
 		return -1;
+	
 	// 이미 기다린 자식이면
-	for (e=list_begin(&parent_thread->already_wait_list); e!=list_end(&parent_thread->already_wait_list); e = list_next(e)){
-		e_thread = list_entry(e, struct thread, aw_elem);
-		if (e_thread->tid == child_tid){
-			return -1;
-		}
-	}
-	list_push_back(&parent_thread->already_wait_list, &child_thread->aw_elem);
+	// for (e=list_begin(&parent_thread->already_wait_list); e!=list_end(&parent_thread->already_wait_list); e = list_next(e)){
+	// 	e_thread = list_entry(e, struct thread, aw_elem);
+	// 	if (e_thread->tid == child_tid){
+	// 		return -1;
+	// 	}
+	// }
+	// list_push_back(&parent_thread->already_wait_list, &child_thread->aw_elem);
+
 	// 기다린다
 	sema_down(&child_thread->process_sema);
 
