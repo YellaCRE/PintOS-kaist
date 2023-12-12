@@ -26,7 +26,7 @@ void check_fd_valid(int fd);
 void _halt (void);
 void _exit (int status);
 
-pid_t _fork (const char *thread_name);
+pid_t _fork (const char *thread_name, struct intr_frame *f UNUSED);
 int _exec (const char *cmd_line);
 int _wait (pid_t pid);
 
@@ -70,7 +70,6 @@ syscall_init (void) {
 void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
-	// hex_dump(f->rsp, f->rsp, USER_STACK - f->rsp, true);
 
 	switch (f->R.rax){
 		case SYS_HALT:
@@ -82,7 +81,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 
 		case SYS_FORK:
-			f->R.rax = _fork((const char *)f->R.rdi);
+			f->R.rax = _fork((const char *)f->R.rdi, f);
 			break;
 
 		case SYS_EXEC:
@@ -159,8 +158,11 @@ _exit (int status) {
 }
 
 pid_t
-_fork (const char *thread_name){
-	int child_pid = process_fork((const char *)thread_name, NULL);
+_fork (const char *thread_name, struct intr_frame *f UNUSED){
+	int child_pid;
+	if((child_pid = process_fork((const char *)thread_name, f)) == TID_ERROR){
+		return 0;
+	};
 	return child_pid;
 }
 

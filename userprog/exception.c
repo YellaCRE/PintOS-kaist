@@ -6,8 +6,6 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
-#include "userprog/syscall.h"	// _exit 사용
-
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
