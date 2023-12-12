@@ -134,6 +134,7 @@ struct thread {
 	struct list_elem aw_elem;
 	struct list already_wait_list;
 	struct semaphore process_sema;
+	struct semaphore fork_sema;
 
 	// file descriptor table
 	struct file **fd_table;	

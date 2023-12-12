@@ -29,6 +29,7 @@ static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
 static void __do_fork (void *);
+struct thread * find_child(tid_t child_tid);
 
 /* General process initializer for initd and other process. */
 static void
@@ -56,7 +57,7 @@ process_create_initd (const char *file_name) {
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	// 파일 이름 제대로 만들기
-	ptr = strtok_r(file_name, DELIM_CHARS, &next_ptr);
+	ptr = strtok_r((char *)file_name, DELIM_CHARS, &next_ptr);
 
 	/* Create a new thread to execute FILE_NAME. */
 	tid = thread_create (ptr, PRI_DEFAULT, initd, fn_copy);
@@ -84,11 +85,16 @@ initd (void *f_name) {
 tid_t
 process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	/* Clone current thread to new thread.*/
+	tid_t tid;
 	struct thread *curr = thread_current();
-	curr->intr_frame_ptr = if_;
+	struct thread *child_thread;
 
-	return thread_create (name,
-			PRI_DEFAULT, __do_fork, curr);
+	curr->intr_frame_ptr = if_;
+	tid = thread_create (name, PRI_DEFAULT, __do_fork, curr);
+	
+	child_thread = find_child(tid);
+	sema_down(&child_thread->fork_sema);
+	return tid;
 }
 
 #ifndef VM
@@ -167,12 +173,11 @@ __do_fork (void *aux) {
 		}
 	}
 	process_init ();
+	
 	if_.R.rax = 0;
+	sema_up(&current->fork_sema);
 	/* Finally, switch to the newly created process. */
 	if (succ){
-		// 부모-자식 관계 설정
-		current->parent_thread = parent;
-		list_push_back(&parent->child_list, &current->c_elem);
 		do_iret (&if_);
 	}
 error:
@@ -228,30 +233,17 @@ int
 process_wait (tid_t child_tid UNUSED) {
 	struct list_elem *e;
 	struct thread *e_thread;
-	struct intr_frame *curr_if;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
-
 	// invalid child_tid
 	if (child_tid == TID_ERROR)
 		return -1;
-
 	// 부모의 자식이 없으면
 	if (list_empty(&parent_thread->child_list))
 		return -1;
-
 	// 만약 내 자식이 아니면
-	child_thread = NULL;
-	for (e=list_begin(&parent_thread->child_list); e!=list_end(&parent_thread->child_list); e = list_next(e)){
-		e_thread = list_entry(e, struct thread, c_elem);
-		if (e_thread->tid == child_tid){
-			child_thread = e_thread;
-			break;
-		}
-	}
-	if (!child_thread)
+	if (!(child_thread = find_child(child_tid)))
 		return -1;
-		
 	// 이미 기다린 자식이면
 	for (e=list_begin(&parent_thread->already_wait_list); e!=list_end(&parent_thread->already_wait_list); e = list_next(e)){
 		e_thread = list_entry(e, struct thread, aw_elem);
@@ -260,12 +252,32 @@ process_wait (tid_t child_tid UNUSED) {
 		}
 	}
 	list_push_back(&parent_thread->already_wait_list, &child_thread->aw_elem);
-
 	// 기다린다
-	while(child_thread->exit_code == NULL){
-		sema_down(&child_thread->process_sema);
+	sema_down(&child_thread->process_sema);
+
+	int exit_code = child_thread->exit_code;
+	list_remove(&child_thread->c_elem);				// 부모의 자식 리스트에서 제거
+	child_thread->parent_thread = NULL;				// 부모 초기화
+
+	return exit_code;
+}
+
+struct thread *
+find_child(tid_t child_tid){
+	struct list_elem *e;
+	struct thread *e_thread;
+	struct thread *parent_thread = thread_current();
+	struct thread *child_thread;
+
+	child_thread = NULL;
+	for (e=list_begin(&parent_thread->child_list); e!=list_end(&parent_thread->child_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, c_elem);
+		if (e_thread->tid == child_tid){
+			child_thread = e_thread;
+			break;
+		}
 	}
-	return (int)child_thread->exit_code;
+	return child_thread;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -276,13 +288,9 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	
-	if (curr->parent_thread != NULL){
-		list_remove(&curr->c_elem);					// 부모의 자식 리스트에서 제거
-		curr->parent_thread = NULL;					// 부모 초기화
-	}
 	palloc_free_page((void *)curr->fd_table);	// free fd_table
 	process_cleanup ();							// free process
+	sema_up(&curr->process_sema);				// 자식 종료 sema_up
 }
 
 /* Free the current process's resources. */
@@ -642,27 +650,27 @@ load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
 	// argv[i] 쌓기
 	for (int i=arg_count-1; i>=0; i--){
 		if_->rsp -= strlen(arg_value[i])+1;
-		memcpy(if_->rsp, arg_value[i], strlen(arg_value[i])+1);
+		memcpy((void *)if_->rsp, arg_value[i], strlen(arg_value[i])+1);
 		// printf("argv[%d][]: %p, %s\n", i, if_->rsp, arg_value[i]);
-		arg_value_addr[i] = if_->rsp;
+		arg_value_addr[i] = (char *)if_->rsp;
 	}
 	
 	// word_align
 	uint8_t word_align[8 - (USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
 	if_->rsp -= sizeof(word_align);
-	memcpy(if_->rsp, word_align, sizeof(word_align));
+	memcpy((void *)if_->rsp, word_align, sizeof(word_align));
 	// printf("word_align: %p\n", if_->rsp);
 
 	// null pointer
 	if_->rsp -= sizeof(char **);
-	memset(if_->rsp, 0, sizeof(char **));
+	memset((void *)if_->rsp, 0, sizeof(char **));
 	// printf("argv[%d]: %p, null pointer\n", arg_count, if_->rsp);
 
 	// argv userstack에 쌓기
 	// memcpy(if_->rsp, arg_value, sizeof(arg_value));
 	for (int i=arg_count-1; i>=0; i--){
 		if_->rsp -= sizeof(char **);
-		memcpy(if_->rsp, &arg_value_addr[i], sizeof(char **));
+		memcpy((void *)if_->rsp, &arg_value_addr[i], sizeof(char *));
 		// printf("argv[%d]: %p\n",i ,if_->rsp);
 	}
 
@@ -672,7 +680,7 @@ load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
 
 	// fake "return address"
 	if_->rsp -= sizeof(void *);
-	memset(if_->rsp, 0, sizeof(void *));
+	memset((void *)if_->rsp, 0, sizeof(void *));
 	// printf("fake return address: %p\n", if_->rsp);
 }
 

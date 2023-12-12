@@ -206,6 +206,13 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+
+	// 부모 자식 설정
+	if (t->name != "idle"){
+		t->parent_thread = thread_current();
+		list_push_back(&thread_current()->child_list, &t->c_elem);
+	}
+
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -220,19 +227,6 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 #ifdef USERPROG
-	// intialize exit code
-	t->exit_code = NULL;
-
-	// intialize parent child
-	t->parent_thread = NULL;
-	list_init(&t->child_list);
-
-	// intialize already wait list
-	list_init(&t->already_wait_list);
-
-	// initailize process sema
-	sema_init(&t->process_sema, 0);
-
 	// intialize fd_table
 	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
 	if (t->fd_table == NULL){
@@ -242,7 +236,6 @@ thread_create (const char *name, int priority,
 	for (int i = 3; i < 64; i++){
 		t->fd_table[i] = NULL;
 	}
-
 #endif
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -632,6 +625,22 @@ init_thread (struct thread *t, const char *name, int priority) {
 	
 	list_push_back(&all_list, &t->all_elem);	// recent_cpu를 위한 all_list
 
+#ifdef USERPROG
+	// intialize exit code
+	t->exit_code = NULL;
+
+	// intialize parent child
+	list_init(&t->child_list);
+
+	// intialize already wait list
+	list_init(&t->already_wait_list);
+
+	// initailize process sema
+	sema_init(&t->process_sema, 0);
+
+	// initailize fork sema
+	sema_init(&t->fork_sema, 0);
+#endif
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should

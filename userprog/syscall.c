@@ -154,15 +154,13 @@ void
 _exit (int status) {
 	struct thread *curr = thread_current ();
 	curr->exit_code = status;
-	if (curr->parent_thread != NULL)
-		sema_up(&curr->process_sema);
 	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
 	thread_exit ();
 }
 
 pid_t
 _fork (const char *thread_name, struct intr_frame *f UNUSED){
-	return (pid_t) process_fork((const char *)thread_name, f);
+	return process_fork((const char *)thread_name, f);
 }
 
 int
