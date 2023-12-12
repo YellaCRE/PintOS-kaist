@@ -220,9 +220,18 @@ thread_create (const char *name, int priority,
 	t->tf.eflags = FLAG_IF;
 
 #ifdef USERPROG
-	// intialize child list
-	t->parent_pid = NULL;
-	list_init(&t->children);
+	// intialize exit code
+	t->exit_code = NULL;
+
+	// intialize parent child
+	t->parent_thread = NULL;
+	list_init(&t->child_list);
+
+	// intialize already wait list
+	list_init(&t->already_wait_list);
+
+	// initailize process sema
+	sema_init(&t->process_sema, 0);
 
 	// intialize fd_table
 	t->fd_table = (struct file **)palloc_get_page(PAL_ZERO);
@@ -231,8 +240,9 @@ thread_create (const char *name, int priority,
 		return TID_ERROR;
 	}
 	for (int i = 3; i < 64; i++){
-		t->fd_table[i] = NULL; 		// initialize fd_table
+		t->fd_table[i] = NULL;
 	}
+
 #endif
 	/* Add to run queue. */
 	thread_unblock (t);

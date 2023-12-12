@@ -170,6 +170,9 @@ __do_fork (void *aux) {
 	if_.R.rax = 0;
 	/* Finally, switch to the newly created process. */
 	if (succ){
+		// 부모-자식 관계 설정
+		current->parent_thread = parent;
+		list_push_back(&parent->child_list, &current->c_elem);
 		do_iret (&if_);
 	}
 error:
@@ -223,24 +226,63 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
-	for(int i=0; i<1000000000; i++) {}
-	return -1;
+	struct list_elem *e;
+	struct thread *e_thread;
+	struct intr_frame *curr_if;
+	struct thread *parent_thread = thread_current();
+	struct thread *child_thread;
+
+	// invalid child_tid
+	if (child_tid == TID_ERROR)
+		return -1;
+
+	// 부모의 자식이 없으면
+	if (list_empty(&parent_thread->child_list))
+		return -1;
+
+	// 만약 내 자식이 아니면
+	child_thread = NULL;
+	for (e=list_begin(&parent_thread->child_list); e!=list_end(&parent_thread->child_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, c_elem);
+		if (e_thread->tid == child_tid){
+			child_thread = e_thread;
+			break;
+		}
+	}
+	if (!child_thread)
+		return -1;
+		
+	// 이미 기다린 자식이면
+	for (e=list_begin(&parent_thread->already_wait_list); e!=list_end(&parent_thread->already_wait_list); e = list_next(e)){
+		e_thread = list_entry(e, struct thread, aw_elem);
+		if (e_thread->tid == child_tid){
+			return -1;
+		}
+	}
+	list_push_back(&parent_thread->already_wait_list, &child_thread->aw_elem);
+
+	// 기다린다
+	while(child_thread->exit_code == NULL){
+		sema_down(&child_thread->process_sema);
+	}
+	return (int)child_thread->exit_code;
 }
 
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	palloc_free_page((void *)curr->fd_table);
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	
-	process_cleanup ();
+	if (curr->parent_thread != NULL){
+		list_remove(&curr->c_elem);					// 부모의 자식 리스트에서 제거
+		curr->parent_thread = NULL;					// 부모 초기화
+	}
+	palloc_free_page((void *)curr->fd_table);	// free fd_table
+	process_cleanup ();							// free process
 }
 
 /* Free the current process's resources. */

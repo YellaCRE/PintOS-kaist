@@ -154,31 +154,25 @@ void
 _exit (int status) {
 	struct thread *curr = thread_current ();
 	curr->exit_code = status;
+	if (curr->parent_thread != NULL)
+		sema_up(&curr->process_sema);
 	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
 	thread_exit ();
 }
 
 pid_t
 _fork (const char *thread_name, struct intr_frame *f UNUSED){
-	int child_pid;
-	if((child_pid = process_fork((const char *)thread_name, f)) == TID_ERROR){
-		return 0;
-	};
-	return child_pid;
+	return (pid_t) process_fork((const char *)thread_name, f);
 }
 
 int
 _exec (const char *cmd_line) {
-	if (process_exec((void *)cmd_line) == -1)
-		return -1;
-	NOT_REACHED();
+	return process_exec((void *)cmd_line);
 }
 
 int
 _wait (pid_t pid) {
-	if (process_wait(pid) == -1)
-		return -1;
-	return 0;
+	return process_wait(pid);
 }
 
 bool
