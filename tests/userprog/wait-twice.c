@@ -11,11 +11,8 @@ test_main (void)
 {
   pid_t child;
   if ((child = fork ("child-simple"))){
-    // printf("fork 끝\n");
     msg ("wait(exec()) = %d", wait (child));
-    // printf("첫 번째 wait 끝\n");
     msg ("wait(exec()) = %d", wait (child));
-    // printf("두 번째 wait 끝\n");
   } else {
     exec ("child-simple");
   }

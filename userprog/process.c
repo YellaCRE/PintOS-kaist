@@ -260,14 +260,10 @@ process_wait (tid_t child_tid UNUSED) {
 	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);
 
 	// 기다린다
-	// printf("부모 기다림 시작\n");
 	sema_down(&child_thread->wait_sema);
-	// printf("부모 기다림 끝\n");
-	// printf("자식 이름 %s\n", child_thread->name);
 	int exit_code = child_thread->exit_code;
 	list_remove(&child_thread->c_elem);			// 부모의 자식 리스트에서 제거
 	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
-	// printf("삭제\n");
 	child_thread->parent_thread = NULL;			// 부모 초기화
 	
 	sema_up(&child_thread->free_sema);			// 이제 자식을 정리해도 된다
@@ -308,12 +304,8 @@ process_exit (void) {
 		file_close(curr->file_in_use);			// 사용 중인 파일도 정리
 		curr->file_in_use = NULL;
 	}
-	// printf("자식 이름 %s\n", curr->name);
-	// printf("자식 종료 직전 기다림\n");
 	sema_down(&curr->free_sema);				// 자식 정리하기 전에 부모 기다리기
 	process_cleanup ();							// 자식 프로세스 정리
-	// printf("자식 이름 %s\n", curr->name);
-	// printf("자식 종료\n");
 }
 
 /* Free the current process's resources. */
