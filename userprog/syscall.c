@@ -328,4 +328,5 @@ _close (int fd) {
 		return;
 
 	curr->fd_table[fd] = NULL;
+	file_close(target);
 }
