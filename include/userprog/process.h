@@ -12,5 +12,5 @@ void process_exit (void);
 void process_activate (struct thread *next);
 
 void load_stack(struct intr_frame *if_, char **arg_value, int arg_count);
-
+int find_exit_code(tid_t child_tid);
 #endif /* userprog/process.h */

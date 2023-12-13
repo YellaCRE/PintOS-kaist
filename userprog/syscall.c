@@ -13,6 +13,7 @@
 #include "userprog/process.h"
 #include "threads/init.h"
 #include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "devices/input.h"
 #include <string.h>
 
@@ -145,7 +146,7 @@ check_file_valid(void *ptr){
 
 void
 check_fd_valid(int fd){
-	if (fd <= 0 || fd >= OPEN_MAX)
+	if (fd <= 2 || fd >= OPEN_MAX)
 		_exit(-1);
 }
 
@@ -198,6 +199,10 @@ _exec (const char *cmd_line) {
 
 int
 _wait (pid_t pid) {
+	int child_exit_code;
+	struct thread *curr = thread_current ();
+	if ((child_exit_code = find_exit_code(pid)) != -1)
+		return child_exit_code;
 	return process_wait(pid);
 }
 
@@ -252,7 +257,6 @@ _filesize (int fd) {
 int
 _read (int fd, void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
-	check_fd_valid(fd);
 	lock_acquire(&global_sys_lock);
 
 	struct thread *curr = thread_current ();
@@ -264,6 +268,7 @@ _read (int fd, void *buffer, unsigned size) {
 		read_len = size;
 	}
 	else{
+		check_fd_valid(fd);
 		if (!(target = curr->fd_table[fd])){
 			lock_release(&global_sys_lock);
 			return -1;
@@ -277,7 +282,6 @@ _read (int fd, void *buffer, unsigned size) {
 int
 _write (int fd, const void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
-	check_fd_valid(fd);
 	lock_acquire(&global_sys_lock);
 
 	struct thread *curr = thread_current ();
@@ -289,6 +293,7 @@ _write (int fd, const void *buffer, unsigned size) {
 		write_len = size;
 	}
 	else{
+		check_fd_valid(fd);
 		if (!(target = curr->fd_table[fd])){
 			lock_release(&global_sys_lock);
 			return -1;

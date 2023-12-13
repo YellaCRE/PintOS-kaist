@@ -147,6 +147,8 @@ struct thread {
 	// exit code list
 	struct list exit_code_list;
 
+	// sys lock
+	struct lock sys_lock;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

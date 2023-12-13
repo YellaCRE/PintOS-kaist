@@ -239,7 +239,6 @@ int
 process_wait (tid_t child_tid UNUSED) {
 	struct list_elem *e;
 	struct thread *e_thread;
-	struct exit_info *e_info;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
 	int exit_code;
@@ -253,7 +252,7 @@ process_wait (tid_t child_tid UNUSED) {
 		return -1;
 
 	// 만약 내 자식이면
-	if (!(child_thread = find_child(child_tid)))
+	if ((child_thread = find_child(child_tid)) == NULL)
 		return -1;
 	
 	// 이미 기다린 자식이 아니면
@@ -270,8 +269,9 @@ process_wait (tid_t child_tid UNUSED) {
 	sema_down(&child_thread->wait_sema);
 	
 	exit_code = find_exit_code(child_tid);
+	list_remove(&child_thread->k_elem);
 	list_remove(&child_thread->c_elem);
-	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
+	child_thread->parent_thread = NULL;
 
 	return exit_code;
 }
@@ -316,8 +316,6 @@ find_exit_code(tid_t child_tid){
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
-	struct list_elem *e;
-	struct thread *e_thread;
 	struct thread *curr = thread_current ();
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see

@@ -644,6 +644,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// initailize file in use
 	t->file_in_use = NULL;
 
+	// initailize sys lock
+	lock_init(&t->sys_lock);
 #endif
 }
 
