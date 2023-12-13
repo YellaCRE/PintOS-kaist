@@ -213,9 +213,6 @@ _open (const char *file) {
 	if (!target)
 		return -1;
 
-	if (!strcmp(thread_name(), file))
-		file_deny_write(target);
-
 	for (int i=3; i<OPEN_MAX; i++){
 		if (curr->fd_table[i] == NULL){
 			curr->fd_table[i] = target;
@@ -274,14 +271,11 @@ _write (int fd, const void *buffer, unsigned size) {
 	}
 	else{
 		check_fd_valid(fd);
-		file_deny_write(curr->fd_table[fd]);
 		if (!(target = curr->fd_table[fd])){
 			return -1;
 		}
-		write_len = file_read(target, (void *)buffer, size);
+		write_len = file_write(target, (void *)buffer, size);
 	}
-	if (write_len != size)
-		return -1;
 	return write_len;
 }
 
@@ -309,5 +303,4 @@ _close (int fd) {
 		return;
 
 	curr->fd_table[fd] = NULL;
-	file_close(target);
 }

@@ -208,7 +208,7 @@ thread_create (const char *name, int priority,
 	init_thread (t, name, priority);
 
 	// 부모 자식 설정
-	if (t->name != "idle"){
+	if (strcmp(t->name, "idle")){
 		t->parent_thread = thread_current();
 		list_push_back(&thread_current()->child_list, &t->c_elem);
 	}
@@ -627,7 +627,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 #ifdef USERPROG
 	// intialize exit code
-	t->exit_code = NULL;
+	t->exit_code = 0;
 
 	// intialize parent child
 	list_init(&t->child_list);
@@ -635,14 +635,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// intialize already wait list
 	list_init(&t->killed_list);
 
-	// initailize process sema
+	// initailize semaphore
 	sema_init(&t->process_sema, 0);
-
-	// initailize fork sema
 	sema_init(&t->fork_sema, 0);
+	sema_init(&t->free_sema, 0);
 
 	// initailize sys lock
 	lock_init(&t->sys_lock);
+
+	// initailize file in use
+	t->file_in_use = NULL;
 #endif
 }
 

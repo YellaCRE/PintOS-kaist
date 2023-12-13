@@ -133,14 +133,20 @@ struct thread {
 	struct list child_list;
 	struct list_elem k_elem;
 	struct list killed_list;
+
+	// semaphore
 	struct semaphore process_sema;
 	struct semaphore fork_sema;
+	struct semaphore free_sema;
 
 	// file descriptor table
 	struct file **fd_table;	
 
 	// lock
 	struct lock sys_lock;
+
+	// rox
+	struct file* file_in_use;
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

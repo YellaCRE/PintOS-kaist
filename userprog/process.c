@@ -292,13 +292,20 @@ find_child(tid_t child_tid){
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+	palloc_free_page((void *)curr->fd_table);	// free fd_table
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	palloc_free_page((void *)curr->fd_table);	// free fd_table
-	process_cleanup ();							// free process
+	
+	// 실행 중인 파일을 닫아주기
+	if (curr->file_in_use != NULL){
+		file_close(curr->file_in_use);
+		curr->file_in_use = NULL;
+	}
+
 	sema_up(&curr->process_sema);				// 자식 종료 sema_up
+	process_cleanup ();							// free process
 }
 
 /* Free the current process's resources. */
@@ -437,7 +444,11 @@ load (const char *file_name, struct intr_frame *if_) {
 		printf ("load: %s: open failed\n", argv[0]);
 		goto done;
 	}
-	
+
+	// 실행 중인 파일에 대해서 deny_write 설정
+	file_deny_write(file);
+	t->file_in_use = file;
+
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
 			|| memcmp (ehdr.e_ident, "\177ELF\2\1\1", 7)
@@ -519,7 +530,7 @@ load (const char *file_name, struct intr_frame *if_) {
 done:
 	/* We arrive here whether the load is successful or not. */
 
-	file_close (file);
+	// file_close (file);
 	return success;
 }
 
