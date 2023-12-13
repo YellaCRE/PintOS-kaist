@@ -636,7 +636,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	list_init(&t->killed_list);
 
 	// initailize semaphore
-	sema_init(&t->process_sema, 0);
+	sema_init(&t->wait_sema, 0);
 	sema_init(&t->fork_sema, 0);
 	sema_init(&t->free_sema, 0);
 

@@ -260,13 +260,14 @@ process_wait (tid_t child_tid UNUSED) {
 	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);
 
 	// 기다린다
-	sema_down(&child_thread->process_sema);
+	sema_down(&child_thread->wait_sema);
 
 	int exit_code = child_thread->exit_code;
 	list_remove(&child_thread->c_elem);			// 부모의 자식 리스트에서 제거
 	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
 	child_thread->parent_thread = NULL;			// 부모 초기화
-
+	
+	sema_up(&child_thread->free_sema);			// 이제 자식을 정리해도 된다
 	return exit_code;
 }
 
@@ -292,20 +293,21 @@ find_child(tid_t child_tid){
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	palloc_free_page((void *)curr->fd_table);	// free fd_table
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	
-	// 실행 중인 파일을 닫아주기
+	sema_up(&curr->wait_sema);					// 자식 종료한다고 부모에게 알려주기
+	palloc_free_page((void *)curr->fd_table);	// fd_table도 free해주고
+
 	if (curr->file_in_use != NULL){
-		file_close(curr->file_in_use);
+		file_close(curr->file_in_use);			// 사용 중인 파일도 정리
 		curr->file_in_use = NULL;
 	}
 
-	sema_up(&curr->process_sema);				// 자식 종료 sema_up
-	process_cleanup ();							// free process
+	sema_down(&curr->free_sema);				// 자식 정리하기 전에 부모 기다리기
+	process_cleanup ();							// 자식 프로세스 정리
 }
 
 /* Free the current process's resources. */

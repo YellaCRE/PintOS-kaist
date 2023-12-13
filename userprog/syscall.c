@@ -250,11 +250,10 @@ _read (int fd, void *buffer, unsigned size) {
 		if (!(target = curr->fd_table[fd])){
 			return -1;
 		}
+		lock_acquire(&curr->sys_lock);
 		read_len = file_read(target, buffer, size);
+		lock_release(&curr->sys_lock);
 	}
-
-	if (read_len != size)
-		return -1;
 	return read_len;
 }
 
@@ -274,7 +273,9 @@ _write (int fd, const void *buffer, unsigned size) {
 		if (!(target = curr->fd_table[fd])){
 			return -1;
 		}
+		lock_acquire(&curr->sys_lock);
 		write_len = file_write(target, (void *)buffer, size);
+		lock_release(&curr->sys_lock);
 	}
 	return write_len;
 }

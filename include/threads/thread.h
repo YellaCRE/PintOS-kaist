@@ -135,7 +135,7 @@ struct thread {
 	struct list killed_list;
 
 	// semaphore
-	struct semaphore process_sema;
+	struct semaphore wait_sema;
 	struct semaphore fork_sema;
 	struct semaphore free_sema;
 
