@@ -16,7 +16,6 @@
 #endif
 #include "devices/timer.h"	// timer_ticks warning 제거
 
-
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -233,7 +232,7 @@ thread_create (const char *name, int priority,
 		palloc_free_page(t);
 		return TID_ERROR;
 	}
-	for (int i = 3; i < 64; i++){
+	for (int i = 3; i < OPEN_MAX; i++){
 		t->fd_table[i] = NULL;
 	}
 #endif
@@ -635,16 +634,16 @@ init_thread (struct thread *t, const char *name, int priority) {
 	// intialize already wait list
 	list_init(&t->killed_list);
 
+	// intialize already wait list
+	list_init(&t->exit_code_list);
+
 	// initailize semaphore
 	sema_init(&t->wait_sema, 0);
 	sema_init(&t->fork_sema, 0);
-	sema_init(&t->free_sema, 0);
-
-	// initailize sys lock
-	lock_init(&t->sys_lock);
 
 	// initailize file in use
 	t->file_in_use = NULL;
+
 #endif
 }
 

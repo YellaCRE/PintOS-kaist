@@ -1,5 +1,6 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
+#define OPEN_MAX 128
 
 #include "threads/thread.h"
 

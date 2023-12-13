@@ -137,16 +137,16 @@ struct thread {
 	// semaphore
 	struct semaphore wait_sema;
 	struct semaphore fork_sema;
-	struct semaphore free_sema;
 
 	// file descriptor table
 	struct file **fd_table;	
 
-	// lock
-	struct lock sys_lock;
-
 	// rox
-	struct file* file_in_use;
+	struct file *file_in_use;
+
+	// exit code list
+	struct list exit_code_list;
+
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -156,6 +156,12 @@ struct thread {
 	/* Owned by thread.c. */
 	struct intr_frame tf;               /* Information for switching */
 	unsigned magic;                     /* Detects stack overflow. */
+};
+
+struct exit_info {
+	tid_t tid;
+	int exit_code;
+	struct list_elem e_elem;
 };
 
 struct multiple_ready_queue {

@@ -7,6 +7,7 @@
 #include <string.h>
 #include "userprog/gdt.h"
 #include "userprog/tss.h"
+#include "userprog/syscall.h"
 #include "filesys/directory.h"
 #include "filesys/file.h"
 #include "filesys/filesys.h"
@@ -17,13 +18,13 @@
 #include "threads/thread.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+#include "threads/malloc.h"
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
 // 구분자를 공백으로 설정
 #define DELIM_CHARS	" "
-#define OPEN_MAX 64
 
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
@@ -91,7 +92,8 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 	curr->intr_frame_ptr = if_;
 	tid = thread_create (name, PRI_DEFAULT, __do_fork, curr);
-	
+	if (tid == TID_ERROR)
+		return tid;
 	child_thread = find_child(tid);
 	sema_down(&child_thread->fork_sema);
 	return tid;
@@ -182,7 +184,10 @@ __do_fork (void *aux) {
 		do_iret (&if_);
 	}
 error:
-	thread_exit ();
+	succ = false;
+	sema_up(&current->fork_sema);
+	_exit(-1);
+	// thread_exit ();
 }
 
 /* Switch the current execution context to the f_name.
@@ -234,8 +239,10 @@ int
 process_wait (tid_t child_tid UNUSED) {
 	struct list_elem *e;
 	struct thread *e_thread;
+	struct exit_info *e_info;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
+	int exit_code;
 
 	// invalid child_tid
 	if (child_tid == TID_ERROR)
@@ -261,12 +268,11 @@ process_wait (tid_t child_tid UNUSED) {
 
 	// 기다린다
 	sema_down(&child_thread->wait_sema);
-	int exit_code = child_thread->exit_code;
-	list_remove(&child_thread->c_elem);			// 부모의 자식 리스트에서 제거
-	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
-	child_thread->parent_thread = NULL;			// 부모 초기화
 	
-	sema_up(&child_thread->free_sema);			// 이제 자식을 정리해도 된다
+	exit_code = find_exit_code(child_tid);
+	list_remove(&child_thread->c_elem);
+	list_remove(&child_thread->k_elem);			// 기다린 목록에서 제거
+
 	return exit_code;
 }
 
@@ -288,24 +294,45 @@ find_child(tid_t child_tid){
 	return child_thread;
 }
 
+int
+find_exit_code(tid_t child_tid){
+	struct list_elem *e;
+	struct exit_info *e_info;
+	struct thread *parent_thread = thread_current();
+	int exit_code;
+
+	for (e=list_begin(&parent_thread->exit_code_list); e!=list_end(&parent_thread->exit_code_list); e = list_next(e)){
+		e_info = list_entry(e, struct exit_info, e_elem);
+		if (e_info->tid == child_tid){
+			exit_code = e_info->exit_code;
+			list_remove(e);								// 이미 죽은 자식 제거
+			free(e_info);
+			return exit_code;
+		}
+	}
+	return -1;
+}
+
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
+	struct list_elem *e;
+	struct thread *e_thread;
 	struct thread *curr = thread_current ();
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	
-	sema_up(&curr->wait_sema);					// 자식 종료한다고 부모에게 알려주기
 	palloc_free_page((void *)curr->fd_table);	// fd_table도 free해주고
 
 	if (curr->file_in_use != NULL){
 		file_close(curr->file_in_use);			// 사용 중인 파일도 정리
 		curr->file_in_use = NULL;
 	}
-	sema_down(&curr->free_sema);				// 자식 정리하기 전에 부모 기다리기
+
 	process_cleanup ();							// 자식 프로세스 정리
+	sema_up(&curr->wait_sema);					// 자식 종료한다고 부모에게 알려주기
 }
 
 /* Free the current process's resources. */

@@ -18,7 +18,6 @@
 
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
-#define OPEN_MAX 64
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame * UNUSED);
@@ -27,7 +26,6 @@ void check_file_valid(void *ptr);
 void check_fd_valid(int fd);
 
 void _halt (void);
-void _exit (int status);
 
 pid_t _fork (const char *thread_name, struct intr_frame *f UNUSED);
 int _exec (const char *cmd_line);
@@ -42,6 +40,8 @@ int _write (int fd, const void *buffer, unsigned size);
 void _seek (int fd, unsigned position);
 unsigned _tell (int fd);
 void _close (int fd);
+
+struct lock global_sys_lock;
 
 /* System call.
  *
@@ -67,6 +67,8 @@ syscall_init (void) {
 	 * mode stack. Therefore, we masked the FLAG_FL. */
 	write_msr(MSR_SYSCALL_MASK,
 			FLAG_IF | FLAG_TF | FLAG_DF | FLAG_IOPL | FLAG_AC | FLAG_NT);
+	
+	lock_init(&global_sys_lock);
 }
 
 /* The main system call interface */
@@ -143,7 +145,7 @@ check_file_valid(void *ptr){
 
 void
 check_fd_valid(int fd){
-	if (fd < 2 || fd >= OPEN_MAX)
+	if (fd <= 0 || fd >= OPEN_MAX)
 		_exit(-1);
 }
 
@@ -155,6 +157,14 @@ _halt (void) {
 void
 _exit (int status) {
 	struct thread *curr = thread_current ();
+	struct exit_info *exit_code_info;
+	if (curr->parent_thread != NULL){
+		exit_code_info = (struct exit_info *)malloc(sizeof(struct exit_info));
+		exit_code_info->tid = curr->tid;
+		exit_code_info->exit_code = status;
+		list_push_back(&curr->parent_thread->exit_code_list, &exit_code_info->e_elem);
+	}
+
 	curr->exit_code = status;
 	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
 
@@ -206,22 +216,27 @@ _remove (const char *file) {
 int
 _open (const char *file) {
 	check_file_valid((void *)file);
+	lock_acquire(&global_sys_lock);
+
 	struct file *target;
 	struct thread *curr = thread_current ();
 
 	target = filesys_open(file);
-	if (!target)
+	if (!target){
+		lock_release(&global_sys_lock);
 		return -1;
-
+	}
 	for (int i=3; i<OPEN_MAX; i++){
 		if (curr->fd_table[i] == NULL){
 			curr->fd_table[i] = target;
+			lock_release(&global_sys_lock);
 			return i;
 		}
 	}
 
 	// 만약 fd_table에 빈 공간이 없다면 닫는다.
 	file_close(target);
+	lock_release(&global_sys_lock);
 	return -1;
 }
 
@@ -237,6 +252,9 @@ _filesize (int fd) {
 int
 _read (int fd, void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
+	check_fd_valid(fd);
+	lock_acquire(&global_sys_lock);
+
 	struct thread *curr = thread_current ();
 	struct file *target;
 	unsigned read_len;
@@ -246,20 +264,22 @@ _read (int fd, void *buffer, unsigned size) {
 		read_len = size;
 	}
 	else{
-		check_fd_valid(fd);
 		if (!(target = curr->fd_table[fd])){
+			lock_release(&global_sys_lock);
 			return -1;
 		}
-		lock_acquire(&curr->sys_lock);
 		read_len = file_read(target, buffer, size);
-		lock_release(&curr->sys_lock);
 	}
+	lock_release(&global_sys_lock);
 	return read_len;
 }
 
 int
 _write (int fd, const void *buffer, unsigned size) {
 	check_file_valid((void *) buffer);
+	check_fd_valid(fd);
+	lock_acquire(&global_sys_lock);
+
 	struct thread *curr = thread_current ();
 	struct file *target;
 	unsigned write_len;
@@ -269,14 +289,13 @@ _write (int fd, const void *buffer, unsigned size) {
 		write_len = size;
 	}
 	else{
-		check_fd_valid(fd);
 		if (!(target = curr->fd_table[fd])){
+			lock_release(&global_sys_lock);
 			return -1;
 		}
-		lock_acquire(&curr->sys_lock);
 		write_len = file_write(target, (void *)buffer, size);
-		lock_release(&curr->sys_lock);
 	}
+	lock_release(&global_sys_lock);
 	return write_len;
 }
 
