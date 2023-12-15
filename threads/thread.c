@@ -209,7 +209,7 @@ thread_create (const char *name, int priority,
 	// 부모 자식 설정
 	if (strcmp(t->name, "idle")){
 		t->parent_thread = thread_current();
-		list_push_back(&thread_current()->child_list, &t->c_elem);
+		list_push_back(&t->parent_thread->child_list, &t->c_elem);
 	}
 
 	tid = t->tid = allocate_tid ();
@@ -646,6 +646,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	// initailize sys lock
 	lock_init(&t->sys_lock);
+
+	// initialize parent_thread;
+	t->parent_thread = NULL;
 #endif
 }
 

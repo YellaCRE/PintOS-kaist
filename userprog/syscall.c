@@ -146,7 +146,7 @@ check_file_valid(void *ptr){
 
 void
 check_fd_valid(int fd){
-	if (fd <= 2 || fd >= OPEN_MAX)
+	if (fd < 3 || fd >= OPEN_MAX)
 		_exit(-1);
 }
 
@@ -159,6 +159,12 @@ void
 _exit (int status) {
 	struct thread *curr = thread_current ();
 	struct exit_info *exit_code_info;
+
+	// exit code 설정
+	curr->exit_code = status;
+	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
+
+	// 종료 전 exit code 저장하기
 	if (curr->parent_thread != NULL){
 		exit_code_info = (struct exit_info *)malloc(sizeof(struct exit_info));
 		exit_code_info->tid = curr->tid;
@@ -166,13 +172,12 @@ _exit (int status) {
 		list_push_back(&curr->parent_thread->exit_code_list, &exit_code_info->e_elem);
 	}
 
-	curr->exit_code = status;
-	printf ("%s: exit(%d)\n", curr->name, curr->exit_code);
-
+	// 명시적으로 fd_table 닫아주기
 	for (int i=3; i<OPEN_MAX; i++){
 		_close(i);
 	}
 
+	// process_exit 호출
 	thread_exit ();
 }
 

@@ -92,10 +92,17 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 
 	curr->intr_frame_ptr = if_;
 	tid = thread_create (name, PRI_DEFAULT, __do_fork, curr);
+	
 	if (tid == TID_ERROR)
 		return tid;
+	
 	child_thread = find_child(tid);
 	sema_down(&child_thread->fork_sema);
+	
+	// sema down 이후에 바뀐 exit code 검사
+	if (child_thread->exit_code == -1)
+		return TID_ERROR;
+	
 	return tid;
 }
 
@@ -255,24 +262,20 @@ process_wait (tid_t child_tid UNUSED) {
 	if ((child_thread = find_child(child_tid)) == NULL)
 		return -1;
 	
-	// 이미 기다린 자식이 아니면
-	for (e=list_begin(&parent_thread->killed_list); e!=list_end(&parent_thread->killed_list); e = list_next(e)){
-		e_thread = list_entry(e, struct thread, k_elem);
-		if (e_thread->tid == child_tid){
-			return -1;
-		}
-	}
-	// 기다린 목록에 추가
-	list_push_back(&parent_thread->killed_list, &child_thread->k_elem);
+	// // 이미 기다린 자식이 아니면
+	// for (e=list_begin(&parent_thread->killed_list); e!=list_end(&parent_thread->killed_list); e = list_next(e)){
+	// 	e_thread = list_entry(e, struct thread, k_elem);
+	// 	if (e_thread->tid == child_tid){
+	// 		return -1;
+	// 	}
+	// }
+	// // 기다린 목록에 추가
+	// list_push_back(&parent_thread->killed_list, &child_thread->k_elem);
 
 	// 기다린다
 	sema_down(&child_thread->wait_sema);
 	
 	exit_code = find_exit_code(child_tid);
-	list_remove(&child_thread->k_elem);
-	list_remove(&child_thread->c_elem);
-	child_thread->parent_thread = NULL;
-
 	return exit_code;
 }
 
@@ -322,14 +325,24 @@ process_exit (void) {
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
 	
-	palloc_free_page((void *)curr->fd_table);	// fd_table도 free해주고
+	palloc_free_page((void *)curr->fd_table);	// fd_table 메모리 정리
 
 	if (curr->file_in_use != NULL){
-		file_close(curr->file_in_use);			// 사용 중인 파일도 정리
+		file_close(curr->file_in_use);			// 사용 중인 파일도 닫기
 		curr->file_in_use = NULL;
 	}
 
-	process_cleanup ();							// 자식 프로세스 정리
+	if (curr->parent_thread != NULL){
+		if (!list_empty(&curr->parent_thread->child_list)){
+			list_remove(&curr->c_elem);
+			curr->parent_thread = NULL;
+		}
+
+		// if (!list_empty(&curr->parent_thread->killed_list)){
+		// 	list_remove(&curr->k_elem);
+		// }
+	}
+	process_cleanup ();							// pml4도 메모리 정리
 	sema_up(&curr->wait_sema);					// 자식 종료한다고 부모에게 알려주기
 }
 
