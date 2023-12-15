@@ -100,7 +100,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	sema_down(&child_thread->fork_sema);
 	
 	// sema down 이후에 바뀐 exit code 검사
-	if (child_thread->exit_code == -1)
+	if (&child_thread->exit_code == -1)
 		return TID_ERROR;
 	
 	return tid;
