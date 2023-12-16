@@ -442,6 +442,7 @@ static bool validate_segment (const struct Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		uint32_t read_bytes, uint32_t zero_bytes,
 		bool writable);
+void load_stack(struct intr_frame *if_, char **arg_value, int arg_count);
 
 /* Loads an ELF executable from FILE_NAME into the current thread.
  * Stores the executable's entry point into *RIP
@@ -617,6 +618,49 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 	return true;
 }
 
+void
+load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
+	char *arg_value_addr[64];
+
+	// printf("USER_STACK: %p\n", if_->rsp);
+
+	// argv[i] 쌓기
+	for (int i=arg_count-1; i>=0; i--){
+		if_->rsp -= strlen(arg_value[i])+1;
+		memcpy((void *)if_->rsp, arg_value[i], strlen(arg_value[i])+1);
+		// printf("argv[%d][]: %p, %s\n", i, if_->rsp, arg_value[i]);
+		arg_value_addr[i] = (char *)if_->rsp;
+	}
+	
+	// word_align
+	uint8_t word_align[8 - (USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
+	if_->rsp -= sizeof(word_align);
+	memcpy((void *)if_->rsp, word_align, sizeof(word_align));
+	// printf("word_align: %p\n", if_->rsp);
+
+	// null pointer
+	if_->rsp -= sizeof(char **);
+	memset((void *)if_->rsp, 0, sizeof(char **));
+	// printf("argv[%d]: %p, null pointer\n", arg_count, if_->rsp);
+
+	// argv userstack에 쌓기
+	// memcpy(if_->rsp, arg_value, sizeof(arg_value));
+	for (int i=arg_count-1; i>=0; i--){
+		if_->rsp -= sizeof(char **);
+		memcpy((void *)if_->rsp, &arg_value_addr[i], sizeof(char *));
+		// printf("argv[%d]: %p\n",i ,if_->rsp);
+	}
+
+	// RDI: argc | RSI: &argv[0]
+	(&if_->R)->rdi = arg_count;
+	(&if_->R)->rsi = if_->rsp;
+
+	// fake "return address"
+	if_->rsp -= sizeof(void *);
+	memset((void *)if_->rsp, 0, sizeof(void *));
+	// printf("fake return address: %p\n", if_->rsp);
+}
+
 #ifndef VM
 /* Codes of this block will be ONLY USED DURING project 2.
  * If you want to implement the function for whole project 2, implement it
@@ -696,49 +740,6 @@ setup_stack (struct intr_frame *if_) {
 			palloc_free_page (kpage);
 	}
 	return success;
-}
-
-void
-load_stack(struct intr_frame *if_, char **arg_value, int arg_count){
-	char *arg_value_addr[64];
-
-	// printf("USER_STACK: %p\n", if_->rsp);
-
-	// argv[i] 쌓기
-	for (int i=arg_count-1; i>=0; i--){
-		if_->rsp -= strlen(arg_value[i])+1;
-		memcpy((void *)if_->rsp, arg_value[i], strlen(arg_value[i])+1);
-		// printf("argv[%d][]: %p, %s\n", i, if_->rsp, arg_value[i]);
-		arg_value_addr[i] = (char *)if_->rsp;
-	}
-	
-	// word_align
-	uint8_t word_align[8 - (USER_STACK - if_->rsp) % 8];	// 성능을 위해 8의 배수로 맞춰준다
-	if_->rsp -= sizeof(word_align);
-	memcpy((void *)if_->rsp, word_align, sizeof(word_align));
-	// printf("word_align: %p\n", if_->rsp);
-
-	// null pointer
-	if_->rsp -= sizeof(char **);
-	memset((void *)if_->rsp, 0, sizeof(char **));
-	// printf("argv[%d]: %p, null pointer\n", arg_count, if_->rsp);
-
-	// argv userstack에 쌓기
-	// memcpy(if_->rsp, arg_value, sizeof(arg_value));
-	for (int i=arg_count-1; i>=0; i--){
-		if_->rsp -= sizeof(char **);
-		memcpy((void *)if_->rsp, &arg_value_addr[i], sizeof(char *));
-		// printf("argv[%d]: %p\n",i ,if_->rsp);
-	}
-
-	// RDI: argc | RSI: &argv[0]
-	(&if_->R)->rdi = arg_count;
-	(&if_->R)->rsi = if_->rsp;
-
-	// fake "return address"
-	if_->rsp -= sizeof(void *);
-	memset((void *)if_->rsp, 0, sizeof(void *));
-	// printf("fake return address: %p\n", if_->rsp);
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
