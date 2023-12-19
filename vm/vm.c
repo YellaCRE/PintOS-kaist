@@ -3,6 +3,7 @@
 #include "threads/malloc.h"
 #include "vm/vm.h"
 #include "vm/inspect.h"
+#include "threads/mmu.h"
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -47,14 +48,46 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
 	struct supplemental_page_table *spt = &thread_current ()->spt;
+	struct page *page = NULL;
+	bool (*initializer) = NULL;
 
 	/* Check wheter the upage is already occupied or not. */
 	if (spt_find_page (spt, upage) == NULL) {
 		/* TODO: Create the page, fetch the initialier according to the VM type,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
+		// Create the page
+		page = (struct page *)malloc(sizeof(page));
+		
+		// fetch the initialier
+		switch (type)
+		{
+		case VM_UNINIT:
+			// uninit이라 initializer가 없다
+			break;
 
+		case VM_ANON:
+			initializer = anon_initializer;
+			break;
+
+		case VM_FILE:
+			initializer = file_backed_initializer;
+			break;
+
+		case VM_PAGE_CACHE:
+			// initializer = page_cache_initializer;
+			break;
+
+		default:
+			NOT_REACHED();
+		}
+
+		// create "uninit" page struct
+		uninit_new(page, upage, init, type, aux, initializer);
+		page->writable = writable;
+		
 		/* TODO: Insert the page into the spt. */
+		return spt_insert_page(spt, page);
 	}
 err:
 	return false;
@@ -65,8 +98,16 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
+	struct list_elem *e;
 
-	return page;
+	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
+		page = list_entry(e, struct supplemental_page, sp_elem)->spage;
+		if (page->va == va){
+			return page;
+		}
+	}
+
+	return NULL;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -75,6 +116,24 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
+	struct list_elem *e;
+	struct page *e_page = NULL;
+
+	// check valid
+	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
+		e_page = list_entry(e, struct supplemental_page, sp_elem)->spage;
+		if (e_page->va == page->va){
+			return succ;
+		}
+	}
+
+	// init supplemental_page
+	struct supplemental_page *supplemental_page = NULL;
+
+	// insert supplemental_page
+	supplemental_page->spage = page;
+	list_push_back(&spt->supplemental_page_list, &supplemental_page->sp_elem);
+	succ = true;
 
 	return succ;
 }
@@ -112,6 +171,23 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
+	// Gets a new physical page
+	void *physical_page = palloc_get_page(PAL_USER);
+	if (!physical_page){
+		palloc_free_page(physical_page);
+		PANIC("todo");
+	}
+
+	// also allocate a frame
+	frame = (struct frame *)malloc(sizeof(struct frame));
+	if (!frame){
+		free(frame);
+		PANIC("todo");
+	}
+
+	// initialize its members
+	frame->kva = physical_page;
+	frame->page = NULL;
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
@@ -153,6 +229,10 @@ bool
 vm_claim_page (void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function */
+	page = spt_find_page(&thread_current()->spt, va);
+
+	if (!page)
+		return false;
 
 	return vm_do_claim_page (page);
 }
@@ -167,6 +247,8 @@ vm_do_claim_page (struct page *page) {
 	page->frame = frame;
 
 	/* TODO: Insert page table entry to map page's VA to frame's PA. */
+	if (!pml4_set_page(thread_current()->pml4, page->va, frame->kva, page->writable))
+		return false;
 
 	return swap_in (page, frame->kva);
 }
@@ -174,6 +256,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
+	list_init(&spt->supplemental_page_list);
 }
 
 /* Copy supplemental page table from src to dst */

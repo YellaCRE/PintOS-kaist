@@ -30,6 +30,7 @@ enum vm_type {
 #ifdef EFILESYS
 #include "filesys/page_cache.h"
 #endif
+#include <list.h>
 
 struct page_operations;
 struct thread;
@@ -45,8 +46,9 @@ struct page {
 	void *va;              /* Address in terms of user space */
 	struct frame *frame;   /* Back reference for frame */
 
-	/* Your implementation */
+	bool writable;
 
+	/* Your implementation */
 	/* Per-type data are binded into the union.
 	 * Each function automatically detects the current union */
 	union {
@@ -85,6 +87,12 @@ struct page_operations {
  * We don't want to force you to obey any specific design for this struct.
  * All designs up to you for this. */
 struct supplemental_page_table {
+	struct list supplemental_page_list;
+};
+
+struct supplemental_page {
+	struct page *spage;
+	struct list_elem sp_elem;
 };
 
 #include "threads/thread.h"

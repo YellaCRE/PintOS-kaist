@@ -765,11 +765,41 @@ install_page (void *upage, void *kpage, bool writable) {
  * If you want to implement the function for only project 2, implement it on the
  * upper block. */
 
+struct load_info {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+	bool writable;
+};
+
 static bool
 lazy_load_segment (struct page *page, void *aux) {
 	/* TODO: Load the segment from the file */
 	/* TODO: This called when the first page fault occurs on address VA. */
 	/* TODO: VA is available when calling this function. */
+	struct load_info *aux_load_info = (struct load_info *) aux;
+
+	struct file *file 		= aux_load_info->file;
+	off_t ofs				= aux_load_info->ofs;
+	uint8_t *upage 			= page->va;
+	size_t page_read_bytes 	= aux_load_info->page_read_bytes;
+	size_t page_zero_bytes 	= PGSIZE - page_read_bytes;
+	bool writable 			= aux_load_info->writable;
+
+	file_seek (file, ofs);
+	/* Get a page of memory. */
+	uint8_t *kpage = palloc_get_page (PAL_USER);
+	if (kpage == NULL)
+		return false;
+
+	/* Load this page. */
+	if (file_read (file, kpage, page_read_bytes) != (int) page_read_bytes) {
+		palloc_free_page (kpage);
+		return false;
+	}
+	memset (kpage + page_read_bytes, 0, page_zero_bytes);
+	
+	return true;
 }
 
 /* Loads a segment starting at offset OFS in FILE at address
@@ -801,7 +831,12 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		/* TODO: Set up aux to pass information to the lazy_load_segment. */
-		void *aux = NULL;
+		struct load_info *aux = palloc_get_page(PAL_ZERO | PAL_USER);
+		aux->file = file;
+		aux->ofs = ofs;
+		aux->page_read_bytes = page_read_bytes;
+		aux->writable = writable;
+
 		if (!vm_alloc_page_with_initializer (VM_ANON, upage,
 					writable, lazy_load_segment, aux))
 			return false;
