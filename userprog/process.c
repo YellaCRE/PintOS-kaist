@@ -781,10 +781,8 @@ lazy_load_segment (struct page *page, void *aux) {
 
 	struct file *file 		= aux_load_info->file;
 	off_t ofs				= aux_load_info->ofs;
-	uint8_t *upage 			= page->va;
 	size_t page_read_bytes 	= aux_load_info->page_read_bytes;
 	size_t page_zero_bytes 	= PGSIZE - page_read_bytes;
-	bool writable 			= aux_load_info->writable;
 
 	file_seek (file, ofs);
 	/* Get a page of memory. */
