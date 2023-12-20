@@ -61,8 +61,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		page = (struct page *)malloc(sizeof(struct page));
 		
 		// fetch the initialier
-		switch (type)
-		{
+		switch (VM_TYPE(type)){
 		case VM_UNINIT:
 			// uninit이라 initializer가 없다
 			break;
@@ -100,11 +99,11 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
+	printf("%p\n", va);
 	struct list_elem *e;
-
 	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
 		page = list_entry(e, struct page, sp_elem);
-		if (page->va == va){
+		if (page->va == pg_round_down(va)){
 			return page;
 		}
 	}
@@ -208,6 +207,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+
+	if(is_kernel_vaddr(addr))
+		return false;
+	
 	page = spt_find_page(spt, addr);
 	
 	if (!page)
