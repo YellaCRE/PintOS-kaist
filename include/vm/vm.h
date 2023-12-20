@@ -47,6 +47,7 @@ struct page {
 	struct frame *frame;   /* Back reference for frame */
 
 	bool writable;
+	struct list_elem sp_elem;
 
 	/* Your implementation */
 	/* Per-type data are binded into the union.
@@ -88,11 +89,6 @@ struct page_operations {
  * All designs up to you for this. */
 struct supplemental_page_table {
 	struct list supplemental_page_list;
-};
-
-struct supplemental_page {
-	struct page *spage;
-	struct list_elem sp_elem;
 };
 
 #include "threads/thread.h"
