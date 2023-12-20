@@ -57,7 +57,7 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		 * TODO: and then create "uninit" page struct by calling uninit_new. You
 		 * TODO: should modify the field after calling the uninit_new. */
 		// Create the page
-		page = (struct page *)malloc(sizeof(page));
+		page = (struct page *)malloc(sizeof(struct page));
 		
 		// fetch the initialier
 		switch (type)
@@ -212,6 +212,10 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 	struct page *page = NULL;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
+	page = spt_find_page(spt, addr);
+	
+	if (!page)
+		return false;
 
 	return vm_do_claim_page (page);
 }
