@@ -99,7 +99,6 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	printf("%p\n", va);
 	struct list_elem *e;
 	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
 		page = list_entry(e, struct page, sp_elem);
