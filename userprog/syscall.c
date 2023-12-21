@@ -207,9 +207,11 @@ _exec (const char *cmd_line) {
 	check_file_valid((void *)cmd_line);
 	char *fn_copy;
 
-	fn_copy = palloc_get_page (0);
-	if (fn_copy == NULL)
+	fn_copy = palloc_get_page (PAL_ZERO);
+	if (fn_copy == NULL){
+		palloc_free_page(fn_copy);
 		return -1;
+	}
 	
 	strlcpy (fn_copy, cmd_line, PGSIZE);
 

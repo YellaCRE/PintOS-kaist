@@ -269,24 +269,43 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	struct list_elem *e;
 	struct page *parent_page	= NULL;
 	struct page *child_page		= NULL;
+
+	enum vm_type type;
 	void *upage;
+	bool writable;
+	vm_initializer *init;
+	void *aux;
 
 	// Iterate through each page in the src's supplemental page table
 	for (e=list_begin(&src->supplemental_page_list); e!=list_end(&src->supplemental_page_list); e=list_next(e)){
 		parent_page = list_entry(e, struct page, sp_elem);
-		upage = parent_page->va;
-
-		// allocate uninit page
-		if (!vm_alloc_page(page_get_type(parent_page), upage, parent_page->writable))
-			return false;
 		
-		// claim them immediately
-		if (!vm_claim_page(upage))
-			return false;
+		// 변수 지정
+		type 	 = page_get_type(parent_page);
+		upage 	 = parent_page->va;
+		writable = parent_page->writable;
+		init 	 = parent_page->uninit.init;
+		aux 	 = parent_page->uninit.aux;
+		
+		// allocate uninit page
+		// VM_UNINIT
+		if (parent_page->operations->type == VM_UNINIT){
+			if(!vm_alloc_page_with_initializer(type, upage, writable, init, aux))
+                return false;
+		}
+		// VM_ANON or VM_FILE
+		else{
+			if (!vm_alloc_page(type, upage, writable))
+				return false;
+			
+			// claim them immediately
+			if (!vm_claim_page(upage))
+				return false;
 
-		// make a exact copy of the entry in the dst's supplemental page table
-		child_page = spt_find_page(&dst->supplemental_page_list, upage);
-		memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+			// make a exact copy of the entry in the dst's supplemental page table
+			child_page = spt_find_page(dst, upage);
+			memcpy(child_page->frame->kva, parent_page->frame->kva, PGSIZE);
+		}
 	}
 
 	return true;
@@ -297,14 +316,14 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	struct list_elem *e;
-	struct page *e_page;
+	// struct list_elem *e;
+	// struct page *e_page;
 	
-	// iterate through the page entries
-	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
-		e_page = list_entry(e, struct page, sp_elem);
+	// // iterate through the page entries
+	// for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
+	// 	e_page = list_entry(e, struct page, sp_elem);
 		
-		// call destroy(page) for the pages in the table
-		destroy(e_page);
-	}
+	// 	// call destroy(page) for the pages in the table
+	// 	destroy(e_page);
+	// }
 }
