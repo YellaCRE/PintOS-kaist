@@ -4,6 +4,12 @@
 
 #include "threads/thread.h"
 
+struct load_info {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+};
+
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_ UNUSED);
 int process_exec (void *f_name);

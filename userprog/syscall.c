@@ -157,12 +157,6 @@ check_buffer_valid(void *ptr, unsigned size, bool to_write){
 		_exit(-1);
 	if(to_write == true && page->writable == false)
 		_exit(-1);
-	
-	page = spt_find_page(&thread_current()->spt, ptr+size);
-	if(!page)
-		_exit(-1);
-	if(to_write == true && page->writable == false)
-		_exit(-1);
 }
 #endif
 
