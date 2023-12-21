@@ -100,7 +100,7 @@ process_fork (const char *name, struct intr_frame *if_ UNUSED) {
 	sema_down(&child_thread->fork_sema);
 	
 	// sema down 이후에 바뀐 exit code 검사
-	if (&child_thread->exit_code == -1)
+	if (child_thread->exit_code == -1)
 		return TID_ERROR;
 	
 	return tid;
@@ -244,8 +244,6 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
-	struct list_elem *e;
-	struct thread *e_thread;
 	struct thread *parent_thread = thread_current();
 	struct thread *child_thread;
 	int exit_code;
@@ -263,6 +261,8 @@ process_wait (tid_t child_tid UNUSED) {
 		return -1;
 	
 	// // 이미 기다린 자식이 아니면
+	// struct list_elem *e;
+	// struct thread *e_thread;
 	// for (e=list_begin(&parent_thread->killed_list); e!=list_end(&parent_thread->killed_list); e = list_next(e)){
 	// 	e_thread = list_entry(e, struct thread, k_elem);
 	// 	if (e_thread->tid == child_tid){

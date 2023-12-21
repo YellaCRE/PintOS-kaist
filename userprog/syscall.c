@@ -144,6 +144,28 @@ check_file_valid(void *ptr){
 		_exit(-1);
 }
 
+#ifdef VM
+// project 3 이후에 만들어야 하는 코드
+void
+check_buffer_valid(void *ptr, unsigned size, bool to_write){
+	if (!ptr || is_kernel_vaddr(ptr))
+		_exit(-1);
+	
+	struct page* page;
+	page = spt_find_page(&thread_current()->spt, ptr);
+	if(!page)
+		_exit(-1);
+	if(to_write == true && page->writable == false)
+		_exit(-1);
+	
+	page = spt_find_page(&thread_current()->spt, ptr+size);
+	if(!page)
+		_exit(-1);
+	if(to_write == true && page->writable == false)
+		_exit(-1);
+}
+#endif
+
 void
 check_fd_valid(int fd){
 	if (fd < 3 || fd >= OPEN_MAX)
@@ -261,7 +283,11 @@ _filesize (int fd) {
 
 int
 _read (int fd, void *buffer, unsigned size) {
-	check_file_valid((void *) buffer);
+	#ifdef VM
+		check_buffer_valid((void *) buffer, size, true);
+	#else
+		check_file_valid((void *) buffer);
+	#endif
 	lock_acquire(&global_sys_lock);
 
 	struct thread *curr = thread_current ();
@@ -286,7 +312,11 @@ _read (int fd, void *buffer, unsigned size) {
 
 int
 _write (int fd, const void *buffer, unsigned size) {
-	check_file_valid((void *) buffer);
+	#ifdef VM
+		check_buffer_valid((void *) buffer, size, true);
+	#else
+		check_file_valid((void *) buffer);
+	#endif
 	lock_acquire(&global_sys_lock);
 
 	struct thread *curr = thread_current ();
