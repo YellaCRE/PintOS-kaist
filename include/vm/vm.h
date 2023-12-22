@@ -68,6 +68,12 @@ struct frame {
 	struct page *page;
 };
 
+struct load_info {
+	struct file *file;
+	off_t ofs;
+	size_t page_read_bytes;
+};
+
 /* The function table for page operations.
  * This is one way of implementing "interface" in C.
  * Put the table of "method" into the struct's member, and

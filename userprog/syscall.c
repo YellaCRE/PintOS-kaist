@@ -41,6 +41,8 @@ int _write (int fd, const void *buffer, unsigned size);
 void _seek (int fd, unsigned position);
 unsigned _tell (int fd);
 void _close (int fd);
+void *_mmap(void *addr, size_t length, int writable, int fd, off_t offset);
+void _munmap(void *addr);
 
 struct lock global_sys_lock;
 
@@ -135,6 +137,14 @@ syscall_handler (struct intr_frame *f UNUSED) {
 
 		case SYS_CLOSE:
 			_close((int)f->R.rdi);
+			break;
+		
+		case SYS_MMAP:
+			f->R.rax = _mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (struct file *)f->R.r10, (off_t)f->R.r8);
+			break;
+		
+		case SYS_MUNMAP:
+			_munmap((void *)f->R.rdi);
 			break;
 	}
 }
@@ -363,4 +373,33 @@ _close (int fd) {
 
 	curr->fd_table[fd] = NULL;
 	file_close(target);
+}
+
+void *
+_mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	// may fail if the file opened as fd has a length of zero bytes
+	if (length <= 0)
+		return NULL;
+
+	// must fail if addr is not page-aligned
+
+	// must fail if the range of pages mapped overlaps any existing set of mapped pages
+
+	// if addr is 0, it must fail
+	if (addr == NULL)
+		return NULL;
+
+	// the fd representing console input and output are not mappable.
+	if (fd == 0 || fd == 1)
+		return NULL;
+
+	// file open as fd
+	struct file *file = thread_current()->fd_table[fd];
+
+	return do_mmap(addr, length, writable, file, offset);
+}
+
+void
+_munmap(void *addr){
+	do_munmap(addr);
 }

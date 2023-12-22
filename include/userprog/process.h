@@ -12,12 +12,6 @@ void process_exit (void);
 void process_activate (struct thread *next);
 
 int find_exit_code(tid_t child_tid);
-#endif /* userprog/process.h */
 
-#ifdef VM
-struct load_info {
-	struct file *file;
-	off_t ofs;
-	size_t page_read_bytes;
-};
-#endif
+bool lazy_load_segment (struct page *page, void *aux);
+#endif /* userprog/process.h */
