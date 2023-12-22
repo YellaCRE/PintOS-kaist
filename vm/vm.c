@@ -336,7 +336,8 @@ supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	 * TODO: writeback all the modified contents to the storage. */
 	struct list_elem *e;
 	struct page *e_page;
-	
+	if (list_empty(&spt->supplemental_page_list))
+		return;
 	// iterate through the page entries
 	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
 		e_page = list_entry(e, struct page, sp_elem);
