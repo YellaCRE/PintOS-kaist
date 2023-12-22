@@ -47,7 +47,6 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 
 	ASSERT (VM_TYPE(type) != VM_UNINIT)
 
-	bool success= false;	// 디버깅용
 	struct supplemental_page_table *spt = &thread_current ()->spt;
 	struct page *page = NULL;
 	bool (*initializer) = NULL;
@@ -87,11 +86,10 @@ vm_alloc_page_with_initializer (enum vm_type type, void *upage, bool writable,
 		page->writable = writable;
 		
 		/* TODO: Insert the page into the spt. */
-		success = spt_insert_page(spt, page);
-		return success;
+		return spt_insert_page(spt, page);
 	}
 err:
-	return success;
+	return false;
 }
 
 /* Find VA from spt and return page. On error, return NULL. */
@@ -316,14 +314,14 @@ void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	// struct list_elem *e;
-	// struct page *e_page;
+	struct list_elem *e;
+	struct page *e_page;
 	
-	// // iterate through the page entries
-	// for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
-	// 	e_page = list_entry(e, struct page, sp_elem);
-		
-	// 	// call destroy(page) for the pages in the table
-	// 	destroy(e_page);
-	// }
+	// iterate through the page entries
+	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
+		e_page = list_entry(e, struct page, sp_elem);
+		// call destroy(page) for the pages in the table
+		list_remove(e);
+		destroy(e_page);
+	}
 }

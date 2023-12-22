@@ -352,6 +352,7 @@ process_cleanup (void) {
 	struct thread *curr = thread_current ();
 
 #ifdef VM
+	// if (!list_empty(&curr->spt.supplemental_page_list))
 	supplemental_page_table_kill (&curr->spt);
 #endif
 
