@@ -16,7 +16,9 @@
 #include "threads/malloc.h"
 #include "devices/input.h"
 #include <string.h>
-
+#ifdef VM
+#include "vm/vm.h"
+#endif
 #define STDIN_FILENO 0
 #define STDOUT_FILENO 1
 
@@ -377,16 +379,35 @@ _close (int fd) {
 
 void *
 _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	struct thread *curr = thread_current();
+	struct file *file;
+
 	// may fail if the file opened as fd has a length of zero bytes
-	if (length <= 0)
+	if ((long long)length <= 0)
 		return NULL;
 
 	// must fail if addr is not page-aligned
+	if (pg_round_down(addr) != addr)
+		return NULL;
 
-	// must fail if the range of pages mapped overlaps any existing set of mapped pages
+	// Tries to mmap an invalid offset
+	if (offset > length)
+		return NULL;
+
+	if (offset % PGSIZE != 0)
+		return NULL;
+
+	// must fail if overlaps any existing set of mapped pages
+	if (spt_find_page(&curr->spt, addr))
+		return NULL;
 
 	// if addr is 0, it must fail
 	if (addr == NULL)
+		return NULL;
+	
+	// try to mmap over kernel
+	// addr이 커널 시작 주소인지 || 64비트 이상으로 사용하는지
+	if (addr == KERN_BASE || is_kernel_vaddr(addr))
 		return NULL;
 
 	// the fd representing console input and output are not mappable.
@@ -394,7 +415,8 @@ _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 		return NULL;
 
 	// file open as fd
-	struct file *file = thread_current()->fd_table[fd];
+	if (!(file = curr->fd_table[fd]))
+		return NULL;
 
 	return do_mmap(addr, length, writable, file, offset);
 }
