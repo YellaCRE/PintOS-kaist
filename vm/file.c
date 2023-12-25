@@ -70,7 +70,7 @@ do_mmap (void *addr, size_t length, int writable,
 		size_t page_zero_bytes = PGSIZE - page_read_bytes;
 
 		struct load_info *aux;
-		aux = palloc_get_page(PAL_ZERO | PAL_USER);
+		aux = (struct load_info *)malloc(sizeof(struct load_info));
 
 		aux->file = mapping_file;
 		aux->ofs = offset;
@@ -79,7 +79,7 @@ do_mmap (void *addr, size_t length, int writable,
 		// return NULL which is not a valid address to map a file
 		if (!vm_alloc_page_with_initializer (VM_FILE, addr,
 					writable, lazy_load_segment, aux)){
-			palloc_free_page(aux);
+			free(aux);
 			return NULL;
 		}
 
