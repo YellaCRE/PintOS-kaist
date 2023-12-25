@@ -2,7 +2,7 @@
 
 #include "vm/vm.h"
 #include "threads/vaddr.h"
-#include "threads/palloc.h"
+#include "threads/malloc.h"
 #include "threads/mmu.h"
 #include "userprog/process.h"
 
