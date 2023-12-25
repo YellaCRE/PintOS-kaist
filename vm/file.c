@@ -78,8 +78,10 @@ do_mmap (void *addr, size_t length, int writable,
 
 		// return NULL which is not a valid address to map a file
 		if (!vm_alloc_page_with_initializer (VM_FILE, addr,
-					writable, lazy_load_segment, aux))
+					writable, lazy_load_segment, aux)){
+			palloc_free_page(aux);
 			return NULL;
+		}
 
 		/* Advance. */
 		read_bytes -= page_read_bytes;
