@@ -111,8 +111,8 @@ do_munmap (void *addr) {
 		
 		// written back to the file
 		aux = (struct load_info *) page->uninit.aux;
-		if (!pml4_is_dirty(curr->pml4, addr)){
-			file_write_at(aux->file, addr, aux->page_read_bytes, aux->ofs);
+		if (pml4_is_dirty(curr->pml4, page->va)){
+			file_write_at(aux->file, page->va, aux->page_read_bytes, aux->ofs);
             pml4_set_dirty (curr->pml4, page->va, 0);
 		}
 
