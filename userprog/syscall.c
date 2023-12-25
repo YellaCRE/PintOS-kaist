@@ -379,6 +379,7 @@ _close (int fd) {
 
 void *
 _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
+	#ifdef VM
 	struct thread *curr = thread_current();
 	struct file *file;
 
@@ -419,9 +420,12 @@ _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 		return NULL;
 
 	return do_mmap(addr, length, writable, file, offset);
+	#endif
 }
 
 void
 _munmap(void *addr){
+	#ifdef VM
 	do_munmap(addr);
+	#endif
 }
