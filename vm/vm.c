@@ -20,6 +20,33 @@ vm_init (void) {
 	/* TODO: Your code goes here. */
 }
 
+// hash helper
+unsigned
+page_hash (const struct hash_elem *page_elem, void *aux UNUSED) {
+	const struct page *page = hash_entry (page_elem, struct page, hash_elem);
+	
+	return hash_bytes(&page->va, sizeof page->va);
+}
+
+bool
+page_less (const struct hash_elem *page_elem_a, const struct hash_elem *page_elem_b, void *aux UNUSED) {
+	const struct page *page_a = hash_entry(page_elem_a, struct page, hash_elem);
+	const struct page *page_b = hash_entry(page_elem_b, struct page, hash_elem);
+	
+	return page_a->va < page_b->va;
+}
+
+struct page *
+page_lookup (const void *va) {
+	struct page page;
+	struct hash_elem *page_elem;
+	
+	page.va = pg_round_down(va);
+	page_elem = hash_find(&thread_current()->spt.supplemental_page_hash, &page.hash_elem);
+	
+	return page_elem != NULL ? hash_entry(page_elem, struct page, hash_elem) : NULL;
+}
+
 /* Get the type of the page. This function is useful if you want to know the
  * type of the page after it will be initialized.
  * This function is fully implemented now. */
@@ -98,15 +125,13 @@ struct page *
 spt_find_page (struct supplemental_page_table *spt UNUSED, void *va UNUSED) {
 	struct page *page = NULL;
 	/* TODO: Fill this function. */
-	struct list_elem *e;
-	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
-		page = list_entry(e, struct page, sp_elem);
-		if (page->va == pg_round_down(va)){
-			return page;
-		}
+	page = page_lookup(pg_round_down(va));
+	
+	if (!page) {
+		return NULL;
 	}
-
-	return NULL;
+	
+	return page;
 }
 
 /* Insert PAGE into spt with validation. */
@@ -115,20 +140,11 @@ spt_insert_page (struct supplemental_page_table *spt UNUSED,
 		struct page *page UNUSED) {
 	int succ = false;
 	/* TODO: Fill this function. */
-	struct list_elem *e;
-	struct page *parent_page = NULL;
-
-	// check valid
-	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
-		parent_page = list_entry(e, struct page, sp_elem);
-		if (parent_page->va == page->va){
-			return succ;
-		}
+	if (!hash_insert(&spt->supplemental_page_hash, &page->hash_elem)) {
+		succ = true;
 	}
 
-	// insert supplemental_page	
-	list_push_back(&spt->supplemental_page_list, &page->sp_elem);
-	return true;
+	return succ;
 }
 
 void
@@ -280,7 +296,7 @@ vm_do_claim_page (struct page *page) {
 /* Initialize new supplemental page table */
 void
 supplemental_page_table_init (struct supplemental_page_table *spt UNUSED) {
-	list_init(&spt->supplemental_page_list);
+	hash_init(&spt->supplemental_page_hash, page_hash, page_less, NULL);
 }
 
 /* Copy supplemental page table from src to dst */
@@ -288,7 +304,6 @@ bool
 supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 		struct supplemental_page_table *src UNUSED) {
 	
-	struct list_elem *e;
 	struct page *parent_page	= NULL;
 	struct page *child_page		= NULL;
 
@@ -299,8 +314,11 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	void *aux;
 
 	// Iterate through each page in the src's supplemental page table
-	for (e=list_begin(&src->supplemental_page_list); e!=list_end(&src->supplemental_page_list); e=list_next(e)){
-		parent_page = list_entry(e, struct page, sp_elem);
+	struct hash_iterator i;
+	hash_first(&i, &src->supplemental_page_hash);
+	while (hash_next(&i))
+	{
+		parent_page = hash_entry(hash_cur(&i), struct page, hash_elem);
 		
 		// 변수 지정
 		type 	 = page_get_type(parent_page);
@@ -333,20 +351,17 @@ supplemental_page_table_copy (struct supplemental_page_table *dst UNUSED,
 	return true;
 }
 
+// kill helper
+static void
+page_destroy(struct hash_elem *e, void *aux) {
+	struct page *page = hash_entry (e, struct page, hash_elem);
+	vm_dealloc_page(page);
+}
+
 /* Free the resource hold by the supplemental page table */
 void
 supplemental_page_table_kill (struct supplemental_page_table *spt UNUSED) {
 	/* TODO: Destroy all the supplemental_page_table hold by thread and
 	 * TODO: writeback all the modified contents to the storage. */
-	struct list_elem *e;
-	struct page *e_page;
-	if (list_empty(&spt->supplemental_page_list))
-		return;
-	// iterate through the page entries
-	for (e=list_begin(&spt->supplemental_page_list); e!=list_end(&spt->supplemental_page_list); e=list_next(e)){
-		e_page = list_entry(e, struct page, sp_elem);
-		// call destroy(page) for the pages in the table
-		list_remove(e);
-		destroy(e_page);
-	}
+	hash_clear(&spt->supplemental_page_hash, page_destroy);
 }
