@@ -188,16 +188,16 @@ vm_get_frame (void) {
 }
 
 /* Growing the stack. */
-static void
-vm_stack_growth (void *addr UNUSED) {
-	// Make sure you round down the addr to PGSIZE
-	void *fault_addr = pg_round_down(addr);
-
+static bool
+vm_stack_growth(void *addr UNUSED) {
+	// addr = stack_bottom - PGSIZE
 	// Increases the stack size by allocating one or more anonymous pages
-	if (vm_alloc_page(VM_ANON | VM_MARKER_0, fault_addr, true)){
-		// no longer a faulted address
-		vm_claim_page(fault_addr);
+	if (vm_alloc_page(VM_MARKER_0 | VM_ANON, addr, true)) {
+		// Make sure you round down the addr to PGSIZE
+		thread_current()->stack_bottom -= PGSIZE;
+		return true;
 	}
+	return false;
 }
 
 /* Handle the fault on write_protected page */
@@ -209,12 +209,13 @@ vm_handle_wp (struct page *page UNUSED) {
 bool
 vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		bool user UNUSED, bool write UNUSED, bool not_present UNUSED) {
+	struct page *page = NULL;
 	struct supplemental_page_table *spt UNUSED = &thread_current ()->spt;
 	void *rsp_stack;
 	/* TODO: Validate the fault */
 	/* TODO: Your code goes here */
 	// you need to check whether the page fault is a valid case for a stack growth or not.
-	if(is_kernel_vaddr(addr))
+	if(!addr || is_kernel_vaddr(addr))
 		return false;
 	
 	// exception인지 아니면 유저로 온 것인지 확인
@@ -228,8 +229,11 @@ vm_try_handle_fault (struct intr_frame *f UNUSED, void *addr UNUSED,
 		int compare_addr = (long int)addr;
 		// a page fault 8 bytes below the stack pointer && limit the stack size to be 1MB
 		if (rsp_stack - 8 <= addr && USER_STACK - (1<<20) <= compare_addr && compare_addr <= USER_STACK){
+			void *fault_addr = thread_current()->stack_bottom - PGSIZE;
 			// call vm_stack_growth with the faulted address.
-			vm_stack_growth(addr);
+			vm_stack_growth(fault_addr);
+			// no longer a faulted address
+			vm_claim_page(addr);
 			return true;
 		}
 	}
