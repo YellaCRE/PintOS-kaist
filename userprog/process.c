@@ -319,10 +319,27 @@ find_exit_code(tid_t child_tid){
 	return -1;
 }
 
+#ifdef VM
+void 
+mmap_destroy(struct hash_elem *hash_elem, void *aux){
+	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
+
+	if (page && page_get_type(page) == VM_FILE){
+		_munmap(page->va);
+	}
+}
+#endif
+
 /* Exit the process. This function is called by thread_exit (). */
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
+
+#ifdef VM
+	// All mappings are implicitly unmapped when a process exits
+	hash_apply(&curr->spt.supplemental_page_hash, mmap_destroy);
+#endif
+
 	/* TODO: Your code goes here.
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
