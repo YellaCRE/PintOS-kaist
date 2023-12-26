@@ -41,10 +41,11 @@ anon_initializer (struct page *page, enum vm_type type, void *kva) {
 	/* Set up the handler */
 	page->operations = &anon_ops;
 
-	struct anon_page *anon_page = &page->anon;
-
 	// add some information to the anon_page to support the swapping
+	struct anon_page *anon_page = &page->anon;
 	anon_page->swap_table_index = -1;
+	
+	return true;
 }
 
 /* Swap in the page by read contents from the swap disk. */
@@ -77,7 +78,7 @@ anon_swap_out (struct page *page) {
 		return false;
 
 	// copy the page of data into the slot
-	for (int i = 0; i < SECTORS_PER_PAGE; ++i){
+	for (int i = 0; i < SECTORS_PER_PAGE; i++){
 		disk_write(swap_disk, page_no * SECTORS_PER_PAGE + i, page->va + DISK_SECTOR_SIZE * i);
 	}
 	
