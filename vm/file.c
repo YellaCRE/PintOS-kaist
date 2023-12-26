@@ -106,13 +106,13 @@ do_munmap (void *addr) {
 		// 파일 찾기
 		page = spt_find_page(&curr->spt, addr);
         // 파일의 끝인지 확인
-		if (!page)
+		if (!page || page_get_type(page) != VM_FILE)
             break;
 		
 		// written back to the file
-		aux = (struct load_info *) page->uninit.aux;
 		if (pml4_is_dirty(curr->pml4, page->va)){
-			file_write_at(aux->file, page->va, aux->page_read_bytes, aux->ofs);
+			aux = (struct load_info *) page->uninit.aux;
+			file_write_at(aux->file, addr, aux->page_read_bytes, aux->ofs);
             pml4_set_dirty (curr->pml4, page->va, 0);
 		}
 
