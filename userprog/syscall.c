@@ -324,7 +324,7 @@ _read (int fd, void *buffer, unsigned size) {
 int
 _write (int fd, const void *buffer, unsigned size) {
 	#ifdef VM
-		check_buffer_valid((void *) buffer, size, true);
+		check_buffer_valid((void *) buffer, size, false);
 	#else
 		check_file_valid((void *) buffer);
 	#endif
