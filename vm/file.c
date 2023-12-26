@@ -1,10 +1,11 @@
 /* file.c: Implementation of memory backed file object (mmaped object). */
 
 #include "vm/vm.h"
-#include "threads/vaddr.h"
 #include "threads/malloc.h"
 #include "threads/mmu.h"
+#include "threads/vaddr.h"
 #include "userprog/process.h"
+#include <string.h>
 
 static bool file_backed_swap_in (struct page *page, void *kva);
 static bool file_backed_swap_out (struct page *page);
@@ -25,11 +26,13 @@ vm_file_init (void) {
 
 /* Initialize the file backed page */
 bool
-file_backed_initializer (struct page *page, enum vm_type type, void *kva) {
+file_backed_initializer (struct page *page, enum vm_type type UNUSED, void *kva UNUSED) {
 	/* Set up the handler */
 	page->operations = &file_ops;
 
-	struct file_page *file_page = &page->file;
+	struct file_page *file_page UNUSED = &page->file;
+
+	return true;
 }
 
 /* Swap in the page by read contents from the file. */
@@ -69,6 +72,7 @@ file_backed_swap_out (struct page *page) {
 	}
 
 	pml4_clear_page(curr->pml4, page->va);	// 페이지 테이블에서는 지워주기
+	return true;
 }
 
 /* Destory the file backed page. PAGE will be freed by the caller. */

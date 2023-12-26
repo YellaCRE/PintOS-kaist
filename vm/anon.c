@@ -3,6 +3,7 @@
 #include "vm/vm.h"
 #include "devices/disk.h"
 #include <bitmap.h>
+#include "threads/mmu.h"
 #include "threads/vaddr.h"
 
 /* DO NOT MODIFY BELOW LINE */
@@ -58,12 +59,13 @@ anon_swap_in (struct page *page, void *kva) {
 		return false;
 
 	// reading the data contents from the disk to memory.
-	for (int i = 0; i < SECTORS_PER_PAGE; ++i){
+	for (int i = 0; i < SECTORS_PER_PAGE; i++){
 		disk_read(swap_disk, page_no * SECTORS_PER_PAGE + i, kva + DISK_SECTOR_SIZE * i);
 	}
 
 	// Remember to update the swap table
 	bitmap_set(swap_table, page_no, false);				// 비었음 표시
+	return true;
 }
 
 /* Swap out the page by writing contents to the swap disk. */
