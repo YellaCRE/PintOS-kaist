@@ -22,6 +22,7 @@
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
+#include "userprog/syscall.h"
 #endif
 // 구분자를 공백으로 설정
 #define DELIM_CHARS	" "
@@ -37,7 +38,7 @@ struct thread * find_child(tid_t child_tid);
 /* General process initializer for initd and other process. */
 static void
 process_init (void) {
-	struct thread *current = thread_current ();
+	struct thread *current UNUSED = thread_current ();
 }
 
 /* Starts the first userland program, called "initd", loaded from FILE_NAME.
@@ -224,7 +225,7 @@ process_exec (void *f_name) {
 	lock_acquire(&global_sys_lock);
 	success = load (file_name, &_if);
 	lock_release(&global_sys_lock);
-	
+
 	palloc_free_page (file_name);		// 여기서 fn_copy를 free 해준다
 
 	/* If load failed, quit. */
@@ -326,7 +327,7 @@ find_exit_code(tid_t child_tid){
 
 #ifdef VM
 void 
-mmap_destroy(struct hash_elem *hash_elem, void *aux){
+mmap_destroy(struct hash_elem *hash_elem, void *aux UNUSED){
 	struct page *page = hash_entry(hash_elem, struct page, hash_elem);
 
 	if (page && page_get_type(page) == VM_FILE){

@@ -81,7 +81,7 @@ void
 syscall_handler (struct intr_frame *f UNUSED) {
 	// TODO: Your implementation goes here.
 	#ifdef VM
-	thread_current()->rsp_stack = f->rsp;
+	thread_current()->rsp_stack = (void *)f->rsp;
 	#endif
 	
 	switch (f->R.rax){
@@ -142,7 +142,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 			break;
 		
 		case SYS_MMAP:
-			f->R.rax = _mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (struct file *)f->R.r10, (off_t)f->R.r8);
+			f->R.rax = _mmap((void *)f->R.rdi, (size_t)f->R.rsi, (int)f->R.rdx, (int)f->R.r10, (off_t)f->R.r8);
 			break;
 		
 		case SYS_MUNMAP:
@@ -162,7 +162,7 @@ check_file_valid(void *ptr){
 #ifdef VM
 // project 3 이후에 만들어야 하는 코드
 void
-check_buffer_valid(void *ptr, unsigned size, bool to_write){
+check_buffer_valid(void *ptr, unsigned size UNUSED, bool to_write){
 	if (!ptr || is_kernel_vaddr(ptr))
 		_exit(-1);
 	
@@ -238,7 +238,6 @@ _exec (const char *cmd_line) {
 int
 _wait (pid_t pid) {
 	int child_exit_code;
-	struct thread *curr = thread_current ();
 	if ((child_exit_code = find_exit_code(pid)) != -1)
 		return child_exit_code;
 	return process_wait(pid);
@@ -251,7 +250,7 @@ _create (const char *file, unsigned initial_size) {
 	lock_acquire(&global_sys_lock);
 	bool success = filesys_create(file, initial_size);
 	lock_release(&global_sys_lock);
-	
+
 	return success;
 }
 
@@ -397,7 +396,7 @@ _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 		return NULL;
 
 	// Tries to mmap an invalid offset
-	if (offset > length)
+	if (offset > (off_t)length)
 		return NULL;
 
 	if (offset % PGSIZE != 0)
@@ -413,7 +412,7 @@ _mmap(void *addr, size_t length, int writable, int fd, off_t offset){
 	
 	// try to mmap over kernel
 	// addr이 커널 시작 주소인지 || 64비트 이상으로 사용하는지
-	if (addr == KERN_BASE || is_kernel_vaddr(addr))
+	if ((long long)addr == KERN_BASE || is_kernel_vaddr(addr))
 		return NULL;
 
 	// the fd representing console input and output are not mappable.

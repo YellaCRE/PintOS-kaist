@@ -89,7 +89,7 @@ do_mmap (void *addr, size_t length, int writable,
 	void * mapped_va = addr;
 
 	// Set these bytes to zero
-    size_t read_bytes = length > file_length(file) ? file_length(file) : length;
+    size_t read_bytes = length > (size_t)file_length(file) ? (size_t)file_length(file) : length;
     size_t zero_bytes = PGSIZE - read_bytes % PGSIZE;
 	
 	// obtain a separate and independent reference
