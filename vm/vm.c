@@ -7,6 +7,8 @@
 #include <string.h>
 
 struct list frame_table;
+struct lock frame_table_lock;
+struct list_elem *now;
 
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
@@ -21,6 +23,8 @@ vm_init (void) {
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
     list_init(&frame_table);
+	lock_init(&frame_table_lock);
+	now = list_begin(&frame_table);
 }
 
 // hash helper
@@ -163,8 +167,36 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-    victim = list_entry(list_pop_front(&frame_table), struct frame, frame_elem);
-	return victim;
+    struct thread *curr = thread_current();
+    
+    lock_acquire(&frame_table_lock);
+    for (now; now != list_end(&frame_table); now = list_next(now)) {
+        victim = list_entry(now, struct frame, frame_elem);
+
+        if (pml4_is_accessed(curr->pml4, victim->page->va)) {
+            pml4_set_accessed(curr->pml4, victim->page->va, 0);
+        } else {
+            lock_release(&frame_table_lock);
+            return victim;
+        }
+    }
+
+    struct list_elem *now = list_begin(&frame_table);
+
+    for (now; now != list_end(&frame_table); now = list_next(now)) {
+        victim = list_entry(now, struct frame, frame_elem);
+
+        if (pml4_is_accessed(curr->pml4, victim->page->va)) {
+            pml4_set_accessed(curr->pml4, victim->page->va, 0);
+        } else {
+            lock_release(&frame_table_lock);
+            return victim;
+        }
+    }
+    
+    lock_release(&frame_table_lock);
+    ASSERT(now != NULL);
+    return victim;
 }
 
 /* Evict one page and return the corresponding frame.
@@ -198,7 +230,10 @@ vm_get_frame (void) {
 	// initialize its members
 	frame->page = NULL;
 
+	// lock을 걸어주어야 assertion 'intr_context ()'를 피할 수 있다
+	lock_acquire(&frame_table_lock);
     list_push_back(&frame_table, &frame->frame_elem);
+	lock_release(&frame_table_lock);
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);
