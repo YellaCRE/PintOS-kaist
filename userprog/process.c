@@ -26,6 +26,8 @@
 // 구분자를 공백으로 설정
 #define DELIM_CHARS	" "
 
+extern struct lock global_sys_lock;
+
 static void process_cleanup (void);
 static bool load (const char *file_name, struct intr_frame *if_);
 static void initd (void *f_name);
@@ -219,7 +221,10 @@ process_exec (void *f_name) {
 #endif
 
 	/* And then load the binary */
+	lock_acquire(&global_sys_lock);
 	success = load (file_name, &_if);
+	lock_release(&global_sys_lock);
+	
 	palloc_free_page (file_name);		// 여기서 fn_copy를 free 해준다
 
 	/* If load failed, quit. */

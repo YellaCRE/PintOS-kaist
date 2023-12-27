@@ -247,7 +247,12 @@ _wait (pid_t pid) {
 bool
 _create (const char *file, unsigned initial_size) {
 	check_file_valid((void *)file);
-	return filesys_create(file, initial_size);
+
+	lock_acquire(&global_sys_lock);
+	bool success = filesys_create(file, initial_size);
+	lock_release(&global_sys_lock);
+	
+	return success;
 }
 
 bool
