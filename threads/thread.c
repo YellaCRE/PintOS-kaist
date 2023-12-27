@@ -299,8 +299,8 @@ thread_preempt(void){
 	struct thread *curr = thread_current();		// 현재 쓰레드 선언
 	struct thread *first = list_entry(list_begin(&ready_list), struct thread, elem);
 	// 현재 쓰레드와 우선순위 비교
-	if (first->priority > curr->priority){
-		thread_yield();							// 현재 쓰레드가 더 크면 양보
+	if (!intr_context() && first->priority > curr->priority){
+		thread_yield ();
 	}
 }
 
