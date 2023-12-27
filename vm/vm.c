@@ -6,6 +6,8 @@
 #include "threads/mmu.h"
 #include <string.h>
 
+struct list frame_table;
+
 /* Initializes the virtual memory subsystem by invoking each subsystem's
  * intialize codes. */
 void
@@ -18,6 +20,7 @@ vm_init (void) {
 	register_inspect_intr ();
 	/* DO NOT MODIFY UPPER LINES. */
 	/* TODO: Your code goes here. */
+    list_init(&frame_table);
 }
 
 // hash helper
@@ -160,7 +163,7 @@ static struct frame *
 vm_get_victim (void) {
 	struct frame *victim = NULL;
 	 /* TODO: The policy for eviction is up to you. */
-
+    victim = list_entry(list_pop_front(&frame_table), struct frame, frame_elem);
 	return victim;
 }
 
@@ -170,8 +173,8 @@ static struct frame *
 vm_evict_frame (void) {
 	struct frame *victim UNUSED = vm_get_victim ();
 	/* TODO: swap out the victim and return the evicted frame. */
-
-	return NULL;
+    swap_out(victim->page);
+	return victim;
 }
 
 /* palloc() and get frame. If there is no available page, evict the page
@@ -182,23 +185,20 @@ static struct frame *
 vm_get_frame (void) {
 	struct frame *frame = NULL;
 	/* TODO: Fill this function. */
-	// Gets a new physical page
-	void *physical_page = palloc_get_page(PAL_USER);
-	if (!physical_page){
-		palloc_free_page(physical_page);
-		PANIC("todo");
-	}
-
-	// also allocate a frame
+    // also allocate a frame
 	frame = (struct frame *)malloc(sizeof(struct frame));
-	if (!frame){
-		free(frame);
-		PANIC("todo");
+    // Gets a new physical page
+	frame->kva = palloc_get_page(PAL_USER);
+	if (!frame->kva){
+		frame = vm_evict_frame();
+		frame->page = NULL;
+        return frame;
 	}
 
 	// initialize its members
-	frame->kva = physical_page;
 	frame->page = NULL;
+
+    list_push_back(&frame_table, &frame->frame_elem);
 
 	ASSERT (frame != NULL);
 	ASSERT (frame->page == NULL);

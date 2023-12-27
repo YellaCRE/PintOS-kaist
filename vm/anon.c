@@ -76,7 +76,7 @@ anon_swap_out (struct page *page) {
 	int page_no = bitmap_scan(swap_table, 0, 1, false);
 
 	// no more free slot in the disk, you can panic the kernel.
-	if (page_no = BITMAP_ERROR)
+	if (page_no == BITMAP_ERROR)
 		return false;
 
 	// copy the page of data into the slot
